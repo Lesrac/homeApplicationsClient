@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TODO: remove as soon as https connection is enabled -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">raspi5.local</domain>
+    </domain-config>
+</network-security-config>

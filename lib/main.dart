@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import "package:homeApplications/screens/account_screen.dart";
+import 'package:homeApplications/screens/audio_screen.dart';
 import 'package:homeApplications/screens/create_user_screen.dart';
 
 import 'helper/credentials_manager.dart';
@@ -33,7 +34,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Home Applications',
       theme: ThemeData(
         // This is the theme of your application.
         //
@@ -67,6 +68,11 @@ class _MyAppState extends State<MyApp> {
             ),
         '/user':
             (context) => CreateUserScreen(
+              credentials:
+                  ModalRoute.of(context)!.settings.arguments as Credentials,
+            ),
+        '/audio':
+            (context) => AudioScreen(
               credentials:
                   ModalRoute.of(context)!.settings.arguments as Credentials,
             ),

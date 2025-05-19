@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:homeApplications/screens/account_screen.dart';
 import 'package:homeApplications/screens/create_user_screen.dart';
 import 'package:homeApplications/screens/credentials_input_screen.dart';
+import 'audio_screen.dart';
 import 'pocket_money_screen.dart';
 import 'package:homeApplications/models/credentials.dart';
 
@@ -111,6 +112,27 @@ class MainScreen extends StatelessWidget {
                     Icon(Icons.manage_accounts), // Settings icon
                     SizedBox(height: boxHeight),
                     Text('Account Settings', textAlign: TextAlign.center),
+                  ],
+                ),
+              ),
+            ),
+            Card(
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          (context) => AudioScreen(credentials: credentials),
+                    ),
+                  );
+                },
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.music_note), // Settings icon
+                    SizedBox(height: boxHeight),
+                    Text('Audio', textAlign: TextAlign.center),
                   ],
                 ),
               ),

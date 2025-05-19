@@ -1,2 +1,0 @@
-F:/projekte/homeApplicationsClient/android/app/.cxx/Debug/2q395s4f/x86/CMakeFiles/edit_cache.dir
-F:/projekte/homeApplicationsClient/android/app/.cxx/Debug/2q395s4f/x86/CMakeFiles/rebuild_cache.dir

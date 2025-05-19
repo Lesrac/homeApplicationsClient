@@ -1,4 +1,4 @@
-package com.example.myapp
+package ch.family.created.homeApplicationsClient
 
 import io.flutter.embedding.android.FlutterActivity
 

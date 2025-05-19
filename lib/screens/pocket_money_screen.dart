@@ -292,6 +292,28 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
       ),
       body: Stack(
         children: [
+          if (_errorMessage.isNotEmpty)
+            Positioned(
+              top: 8, // Add some margin from the top
+              left: 32,
+              right: 32,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.red.withAlpha((0.6 * 255).toInt()),
+                  // Semi-transparent red background
+                  borderRadius: BorderRadius.circular(8), // Rounded corners
+                ),
+                padding: const EdgeInsets.all(12.0),
+                child: Text(
+                  _errorMessage,
+                  style: const TextStyle(
+                    color: Colors.white, // White text for contrast
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
           widget.credentials.admin
               ? Column(
                 children: [

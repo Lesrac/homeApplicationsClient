@@ -1,2 +1,0 @@
-F:/projekte/homeApplicationsClient/android/app/.cxx/RelWithDebInfo/4n1g3y6n/x86/CMakeFiles/edit_cache.dir
-F:/projekte/homeApplicationsClient/android/app/.cxx/RelWithDebInfo/4n1g3y6n/x86/CMakeFiles/rebuild_cache.dir
