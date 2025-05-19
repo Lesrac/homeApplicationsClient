@@ -20,13 +20,19 @@ class AudioScreen extends StatefulWidget {
 class _AudioScreenState extends State<AudioScreen> {
   final player = AudioPlayer();
   List<String> _songs = [];
-  String? _selectedTitle;
+  String? _currentlyPlayingTitle;
   bool _isLoading = true;
+  String _filter = '';
 
   @override
   void initState() {
     super.initState();
     _fetchSongs();
+    player.onPlayerComplete.listen((event) {
+      setState(() {
+        _currentlyPlayingTitle = null;
+      });
+    });
   }
 
   Future<void> _fetchSongs() async {
@@ -42,9 +48,6 @@ class _AudioScreenState extends State<AudioScreen> {
         setState(() {
           _songs =
               songsJson.map<String>((song) => song['title'] as String).toList();
-          if (_songs.isNotEmpty) {
-            _selectedTitle = _songs.first;
-          }
           _isLoading = false;
         });
       } else {
@@ -59,57 +62,80 @@ class _AudioScreenState extends State<AudioScreen> {
     }
   }
 
-  Future<void> _play() async {
-    if (_selectedTitle == null) return;
+  Future<void> _play(String title) async {
     final url =
-        'http://${widget.credentials.backendAddress}/audio/$_selectedTitle';
+        'http://${widget.credentials.backendAddress}/audio/$title';
     await player.play(UrlSource(url));
+    setState(() {
+      _currentlyPlayingTitle = title;
+    });
   }
 
   Future<void> _stop() async {
     await player.release();
+    setState(() {
+      _currentlyPlayingTitle = null;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final filteredSongs = _songs
+        .where((title) => title.toLowerCase().contains(_filter.toLowerCase()),)
+        .toList();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Play music')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child:
-            _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : Column(
-                  children: [
-                    DropdownButton<String>(
-                      value: _selectedTitle,
-                      hint: const Text('Select a song'),
-                      items:
-                          _songs
-                              .map(
-                                (title) => DropdownMenuItem(
-                                  value: title,
-                                  child: Text(title),
-                                ),
-                              )
-                              .toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedTitle = value;
-                        });
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+          children: [
+            TextField(
+              decoration: const InputDecoration(
+                labelText: 'Filter songs',
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _filter = value;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.builder(
+                itemCount: filteredSongs.length,
+                itemBuilder: (context, index) {
+                  final title = filteredSongs[index];
+                  final isPlaying = _currentlyPlayingTitle == title;
+                  return ListTile(
+                    leading: IconButton(
+                      icon: Icon(
+                        isPlaying ? Icons.stop : Icons.play_arrow,
+                      ),
+                      onPressed: () {
+                        if (isPlaying) {
+                          _stop();
+                        } else {
+                          _play(title);
+                        }
                       },
                     ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.play_arrow),
-                          onPressed: _play,
-                        ),
-                        IconButton(icon: Icon(Icons.stop), onPressed: _stop),
-                      ],
+                    title: Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: isPlaying
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
                     ),
-                  ],
-                ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
