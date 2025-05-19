@@ -45,9 +45,11 @@ class _AudioScreenState extends State<AudioScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         final List<dynamic> songsJson = data['songs'] ?? [];
+        final songsList =
+        songsJson.map<String>((song) => song['title'] as String).toList();
+        songsList.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         setState(() {
-          _songs =
-              songsJson.map<String>((song) => song['title'] as String).toList();
+          _songs = songsList;
           _isLoading = false;
         });
       } else {
