@@ -415,14 +415,31 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
                     subtitle: Text(
                       'Date: ${DateFormat('yyyy-MM-dd').format(entry.date)}',
                     ),
-                    trailing: ElevatedButton(
-                      onPressed: () {
-                        _confirmEntry(entry.id, !entry.confirmed);
-                        setState(() {
-                          entry.confirmed = !entry.confirmed;
-                        });
-                      },
-                      child: Text(entry.confirmed ? 'Refute' : 'Confirm'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          entry.confirmed ? Icons.check : Icons.close,
+                          color: entry.confirmed ? Colors.green : Colors.red,
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size(0,0),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: () {
+                            _confirmEntry(entry.id, !entry.confirmed);
+                            setState(() {
+                              entry.confirmed = !entry.confirmed;
+                            });
+                          },
+                          child: Text(
+                            entry.confirmed ? 'Mark as Not Received' : 'Mark as Received',
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 },
