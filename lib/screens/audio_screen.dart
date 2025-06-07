@@ -24,14 +24,27 @@ class _AudioScreenState extends State<AudioScreen> {
   bool _isLoading = true;
   String _filter = '';
 
+  // Add play all state
+  bool _isPlayingAll = false;
+  List<String> _playAllQueue = [];
+  int _playAllIndex = 0;
+
   @override
   void initState() {
     super.initState();
     _fetchSongs();
     player.onPlayerComplete.listen((event) {
-      setState(() {
-        _currentlyPlayingTitle = null;
-      });
+      if (_isPlayingAll && _playAllIndex < _playAllQueue.length - 1) {
+       setState(() {
+          _playAllIndex++;
+        });
+       _play(_playAllQueue[_playAllIndex], fromPlayAll: true);
+      } else {
+        setState(() {
+          _currentlyPlayingTitle = null;
+          _isPlayingAll = false;
+        });
+      }
     });
   }
 
@@ -64,12 +77,16 @@ class _AudioScreenState extends State<AudioScreen> {
     }
   }
 
-  Future<void> _play(String title) async {
+  Future<void> _play(String title, {bool fromPlayAll = false}) async {
     final url =
         'http://${widget.credentials.backendAddress}/audio/$title';
     await player.play(UrlSource(url));
     setState(() {
       _currentlyPlayingTitle = title;
+      // Only set play all state if called from play all
+      if (!fromPlayAll) {
+        _isPlayingAll = false;
+      }
     });
   }
 
@@ -77,7 +94,18 @@ class _AudioScreenState extends State<AudioScreen> {
     await player.release();
     setState(() {
       _currentlyPlayingTitle = null;
+      _isPlayingAll = false;
     });
+  }
+
+  Future<void> _playAll(List<String> songs) async {
+    if (songs.isEmpty) return;
+    setState(() {
+      _isPlayingAll = true;
+      _playAllQueue = List<String>.from(songs);
+      _playAllIndex = 0;
+    });
+    await _play(_playAllQueue[_playAllIndex], fromPlayAll: true);
   }
 
   @override
@@ -103,6 +131,27 @@ class _AudioScreenState extends State<AudioScreen> {
                   _filter = value;
                 });
               },
+            ),
+            const SizedBox(height: 16),
+            // Add Play All button
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.queue_music),
+                  label: const Text('Play All'),
+                  onPressed: (_isPlayingAll || filteredSongs.isEmpty)
+                      ? null
+                      : () => _playAll(filteredSongs),
+                ),
+                if (_isPlayingAll)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12.0),
+                    child: Text(
+                      'Playing all...',
+                      style: TextStyle(color: Colors.green[700]),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 16),
             Expanded(
