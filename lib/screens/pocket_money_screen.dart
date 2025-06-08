@@ -86,12 +86,12 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
         _users =
             [User(null, id: -1, name: 'Select User', access: 'user')]
                 .followedBy(
-                  (jsonDecode(response.body) as List)
-                      .map((userJson) => User.fromJson(userJson))
-                      .toList()
-                      .where((user) => !user.isAdmin)
-                      .toList(),
-                )
+              (jsonDecode(response.body) as List)
+                  .map((userJson) => User.fromJson(userJson))
+                  .toList()
+                  .where((user) => !user.isAdmin)
+                  .toList(),
+            )
                 .toList();
         _selectedUserId = _users.isNotEmpty ? null : null;
         if (!credentials.admin) {
@@ -111,7 +111,7 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
     }
     try {
       String userIdToLoad =
-          _selectedUserId != null ? _selectedUserId.toString() : "";
+      _selectedUserId != null ? _selectedUserId.toString() : "";
       if (!credentials.admin) {
         userIdToLoad = credentials.id.toString();
       }
@@ -147,11 +147,9 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
     });
   }
 
-  Future<void> _addEntryToBackend(
-    int amount,
-    DateTime date,
-    int userId,
-  ) async {
+  Future<void> _addEntryToBackend(int amount,
+      DateTime date,
+      int userId,) async {
     try {
       final url = Uri.parse(
         'http://${widget.credentials.backendAddress}/pocketMoney/addAction',
@@ -185,7 +183,8 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
   Future<void> _confirmEntry(int? id, bool confirm) async {
     try {
       final url = Uri.parse(
-        'http://${widget.credentials.backendAddress}/pocketMoney/acknowledgeAction',
+        'http://${widget.credentials
+            .backendAddress}/pocketMoney/acknowledgeAction',
       );
       final response = await http.post(
         url,
@@ -316,134 +315,137 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
             ),
           widget.credentials.admin
               ? Column(
-                children: [
-                  DropdownButton<String>(
-                    value:
-                        _users.isNotEmpty && _selectedUserId != null
-                            ? _users
-                                .firstWhere(
-                                  (user) => user.id == _selectedUserId,
-                                  orElse: () => _users.first,
-                                )
-                                .name
-                            : null,
-                    hint: Text("Select User"),
-                    onChanged: (String? newValue) {
-                      setState(() {
-                        _entries = [];
-                        _errorMessage = '';
+            children: [
+              DropdownButton<String>(
+                value:
+                _users.isNotEmpty && _selectedUserId != null
+                    ? _users
+                    .firstWhere(
+                      (user) => user.id == _selectedUserId,
+                  orElse: () => _users.first,
+                )
+                    .name
+                    : null,
+                hint: Text("Select User"),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _entries = [];
+                    _errorMessage = '';
 
-                        _selectedUserId =
-                            _users
-                                .firstWhere(
-                                  (user) => user.name == newValue,
-                                  orElse: () => _users.first,
-                                )
-                                .id;
-                      });
-                      _loadInitialData(widget.credentials);
-                    },
-                    items:
-                        _users.map<DropdownMenuItem<String>>((User user) {
-                          return DropdownMenuItem<String>(
-                            value: user.name,
-                            child: Text(user.name),
-                          );
-                        }).toList(),
-                  ),
-                  ElevatedButton(
-                    onPressed:
-                        _selectedUserId != null ? _showAddEntryDialog : null,
-                    child: Text('Add New Entry'),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount:
-                          _entries
-                              .where(
-                                (element) => element.userId == _selectedUserId,
-                              )
-                              .length,
-                      itemBuilder: (context, index) {
-                        List<PocketMoneyEntry> sortedEntries =
-                            _entries
-                                .where(
-                                  (element) =>
-                                      element.userId == _selectedUserId,
-                                )
-                                .toList()
-                              ..sort(
-                                (a, b) => b.date.compareTo(a.date),
-                              ); // Sort by date descending
-
-                        PocketMoneyEntry entry = sortedEntries[index];
-
-                        return ListTile(
-                          title: Text('Amount: ${entry.amount}'),
-                          subtitle: Text(
-                            'Date: ${DateFormat('yyyy-MM-dd').format(entry.date)}',
-                          ),
-                          trailing: Icon(
-                            entry.confirmed ? Icons.check : Icons.close,
-                            color: entry.confirmed ? Colors.green : Colors.red,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              )
-              : ListView.builder(
-                itemCount:
+                    _selectedUserId =
+                        _users
+                            .firstWhere(
+                              (user) => user.name == newValue,
+                          orElse: () => _users.first,
+                        )
+                            .id;
+                  });
+                  _loadInitialData(widget.credentials);
+                },
+                items:
+                _users.map<DropdownMenuItem<String>>((User user) {
+                  return DropdownMenuItem<String>(
+                    value: user.name,
+                    child: Text(user.name),
+                  );
+                }).toList(),
+              ),
+              ElevatedButton(
+                onPressed:
+                _selectedUserId != null ? _showAddEntryDialog : null,
+                child: Text('Add New Entry'),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount:
+                  _entries
+                      .where(
+                        (element) => element.userId == _selectedUserId,
+                  )
+                      .length,
+                  itemBuilder: (context, index) {
+                    List<PocketMoneyEntry> sortedEntries =
                     _entries
                         .where(
-                          (element) => element.userId == widget.credentials.id,
-                        )
-                        .length,
-                itemBuilder: (context, index) {
-                  List<PocketMoneyEntry> sortedEntries =
-                      _entries
-                          .where((element) => element.userId == _selectedUserId)
-                          .toList()
-                        ..sort(
-                          (a, b) => b.date.compareTo(a.date),
-                        ); // Sort by date descending
+                          (element) =>
+                      element.userId == _selectedUserId,
+                    )
+                        .toList()
+                      ..sort(
+                            (a, b) => b.date.compareTo(a.date),
+                      ); // Sort by date descending
 
-                  PocketMoneyEntry entry = sortedEntries[index];
-                  return ListTile(
-                    title: Text('Amount: ${entry.amount}'),
-                    subtitle: Text(
-                      'Date: ${DateFormat('yyyy-MM-dd').format(entry.date)}',
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          entry.confirmed ? Icons.check : Icons.close,
-                          color: entry.confirmed ? Colors.green : Colors.red,
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            minimumSize: Size(0,0),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          onPressed: () {
-                            _confirmEntry(entry.id, !entry.confirmed);
-                            setState(() {
-                              entry.confirmed = !entry.confirmed;
-                            });
-                          },
-                          child: Text(
-                            entry.confirmed ? 'Mark as Not Received' : 'Mark as Received',
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                    PocketMoneyEntry entry = sortedEntries[index];
+
+                    return ListTile(
+                      title: Text('Amount: ${entry.amount}'),
+                      subtitle: Text(
+                        'Date: ${DateFormat('yyyy-MM-dd').format(entry.date)}',
+                      ),
+                      trailing: Icon(
+                        entry.confirmed ? Icons.check : Icons.close,
+                        color: entry.confirmed ? Colors.green : Colors.red,
+                      ),
+                    );
+                  },
+                ),
               ),
+            ],
+          )
+              : ListView.builder(
+            itemCount:
+            _entries
+                .where(
+                  (element) => element.userId == widget.credentials.id,
+            )
+                .length,
+            itemBuilder: (context, index) {
+              List<PocketMoneyEntry> sortedEntries =
+              _entries
+                  .where((element) => element.userId == _selectedUserId)
+                  .toList()
+                ..sort(
+                      (a, b) => b.date.compareTo(a.date),
+                ); // Sort by date descending
+
+              PocketMoneyEntry entry = sortedEntries[index];
+              return ListTile(
+                title: Text('Amount: ${entry.amount}'),
+                subtitle: Text(
+                  'Date: ${DateFormat('yyyy-MM-dd').format(entry.date)}',
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      entry.confirmed ? Icons.check : Icons.close,
+                      color: entry.confirmed ? Colors.green : Colors.red,
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        minimumSize: Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: () {
+                        _confirmEntry(entry.id, !entry.confirmed);
+                        setState(() {
+                          entry.confirmed = !entry.confirmed;
+                        });
+                      },
+                      child: Text(
+                        entry.confirmed
+                            ? 'Mark as Not Received'
+                            : 'Mark as Received',
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           if (_errorMessage.isNotEmpty)
             Positioned(
               top: 8, // Add some margin from the top
