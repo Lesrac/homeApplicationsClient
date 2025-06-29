@@ -7,8 +7,13 @@ import 'helper/credentials_manager.dart';
 import 'screens/credentials_input_screen.dart';
 import 'package:homeApplications/screens/main_screen.dart';
 import 'package:homeApplications/models/credentials.dart';
+import 'services/service_locator.dart';
 
-void main() => runApp(MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await setupServiceLocator();
+  runApp(MyApp());
+}
 
 bool isConnectedToServer = false;
 

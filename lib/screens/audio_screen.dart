@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -7,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../helper/headers.dart';
 import '../models/credentials.dart';
+import '../services/audio_handler.dart';
+import '../services/service_locator.dart';
 
 class AudioScreen extends StatefulWidget {
   final Credentials credentials;
@@ -18,16 +21,15 @@ class AudioScreen extends StatefulWidget {
 }
 
 class _AudioScreenState extends State<AudioScreen> {
-  final player = AudioPlayer();
+  late final AudioPlayerHandler _audioHandler;
   String? _currentlyPlayingTitle;
   Duration _duration = Duration.zero;
   String _filter = '';
   bool _isLoading = true;
   bool _isPlayingAll = false;
   Duration _position = Duration.zero;
-  int _playAllIndex = 0;
-  List<String> _playAllQueue = [];
   List<String> _songs = [];
+  List<MediaItem> _queue = []; // Store the current queue
 
   // Playlist state
   List<String> _playlist = [];
@@ -38,33 +40,64 @@ class _AudioScreenState extends State<AudioScreen> {
   @override
   void initState() {
     super.initState();
+    _audioHandler = getIt<AudioHandler>() as AudioPlayerHandler;
     _fetchSongs();
-    _loadPlaylist(); // Load playlist from storage
-    player.onPlayerComplete.listen((event) {
-      if (_isPlayingAll && _playAllIndex < _playAllQueue.length - 1) {
+    _loadPlaylist();
+
+    // Set up listeners
+    _audioHandler.player.onPlayerComplete.listen((event) {
+      // AudioService now handles progression in queue
+      if (_queue.isEmpty || _audioHandler.currentIndex >= _queue.length - 1) {
         setState(() {
-          _playAllIndex++;
-        });
-        _play(_playAllQueue[_playAllIndex], fromPlayAll: true);
-      } else {
-        setState(() {
-          _currentlyPlayingTitle = null;
           _isPlayingAll = false;
         });
       }
     });
-    player.onDurationChanged.listen((Duration d) {
+
+    _audioHandler.player.onDurationChanged.listen((Duration d) {
       setState(() {
         _duration = d;
       });
     });
-    player.positionUpdater = TimerPositionUpdater(
+
+    _audioHandler.player.positionUpdater = TimerPositionUpdater(
       interval: const Duration(milliseconds: 200),
-      getPosition: player.getCurrentPosition,
+      getPosition: _audioHandler.player.getCurrentPosition,
     );
-    player.onPositionChanged.listen((Duration p) {
+
+    _audioHandler.player.onPositionChanged.listen((Duration p) {
       setState(() {
         _position = p;
+      });
+    });
+
+    // Listen to changes in currently playing item
+    _audioHandler.mediaItem.listen((mediaItem) {
+      if (mediaItem != null) {
+        setState(() {
+          _currentlyPlayingTitle = mediaItem.title;
+        });
+      } else {
+        setState(() {
+          _currentlyPlayingTitle = null;
+          _duration = Duration.zero;
+          _position = Duration.zero;
+        });
+      }
+    });
+
+    // Listen to queue changes
+    _audioHandler.queue.listen((queue) {
+      setState(() {
+        _queue = queue;
+      });
+    });
+
+    // Listen to playback state changes
+    _audioHandler.playbackState.listen((playbackState) {
+      final isPlaying = playbackState.playing;
+      setState(() {
+        _isPlayingAll = isPlaying && _queue.length > 1;
       });
     });
   }
@@ -98,37 +131,31 @@ class _AudioScreenState extends State<AudioScreen> {
     }
   }
 
-  Future<void> _play(String title, {bool fromPlayAll = false}) async {
+  Future<void> _play(String title) async {
     final url = 'http://${widget.credentials.backendAddress}/audio/$title';
     setState(() {
-      _currentlyPlayingTitle = title;
-      _duration = Duration.zero;
-      _position = Duration.zero;
-      if (!fromPlayAll) {
-        _isPlayingAll = false;
-      }
+      _isPlayingAll = false; // Ensure play all mode is off for single play
     });
-    await player.play(UrlSource(url));
+    await _audioHandler.playFromUrl(url, title);
   }
 
   Future<void> _stop() async {
-    await player.release();
-    setState(() {
-      _currentlyPlayingTitle = null;
-      _isPlayingAll = false;
-      _duration = Duration.zero;
-      _position = Duration.zero;
-    });
+    await _audioHandler.stop();
   }
 
-  Future<void> _playAll(List<String> songs) async {
-    if (songs.isEmpty) return;
+  Future<void> _playAll(List<String> songTitles) async {
+    if (songTitles.isEmpty) return;
+
     setState(() {
       _isPlayingAll = true;
-      _playAllQueue = List<String>.from(songs);
-      _playAllIndex = 0;
     });
-    await _play(_playAllQueue[_playAllIndex], fromPlayAll: true);
+
+    final songs = songTitles.map((title) => SongItem(
+      title: title,
+      url: 'http://${widget.credentials.backendAddress}/audio/$title',
+    )).toList();
+
+    await _audioHandler.playAll(songs);
   }
 
   Future<void> _loadPlaylist() async {
@@ -145,6 +172,14 @@ class _AudioScreenState extends State<AudioScreen> {
   Future<void> _savePlaylist() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_playlistKey, jsonEncode(_playlist));
+
+    // Also update the AudioHandler's queue (doesn't start playing)
+    final songs = _playlist.map((title) => SongItem(
+      title: title,
+      url: 'http://${widget.credentials.backendAddress}/audio/$title',
+    )).toList();
+
+    _audioHandler.setPlaylist(songs);
   }
 
   void _addToPlaylist(String title) {
@@ -167,6 +202,10 @@ class _AudioScreenState extends State<AudioScreen> {
     setState(() {
       _showPlaylist = !_showPlaylist;
     });
+  }
+
+  Future<void> _seekTo(Duration position) async {
+    await _audioHandler.seek(position);
   }
 
   @override
@@ -200,7 +239,11 @@ class _AudioScreenState extends State<AudioScreen> {
                   ),
                   const SizedBox(height: 16),
                   if (_currentlyPlayingTitle != null)
-                    SongProgressBar(duration: _duration, position: _position),
+                    SongProgressBar(
+                      duration: _duration,
+                      position: _position,
+                      onSeek: _seekTo,
+                    ),
                   PlayControlsRow(
                     showPlaylist: _showPlaylist,
                     isPlayingAll: _isPlayingAll,
@@ -341,42 +384,45 @@ class PlayControlsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        if (!showPlaylist)
-          ElevatedButton.icon(
-            icon: const Icon(Icons.queue_music),
-            label: const Text('Play All'),
-            onPressed:
-                (isPlayingAll || filteredSongs.isEmpty) ? null : onPlayAll,
-          ),
-        if (showPlaylist)
-          ElevatedButton.icon(
-            icon: const Icon(Icons.playlist_play),
-            label: const Text('Play All (Playlist)'),
-            onPressed: (isPlayingAll || playlist.isEmpty)
-                ? null
-                : onPlayAllPlaylist,
-          ),
-        const SizedBox(width: 8),
-        OutlinedButton.icon(
-          icon: Icon(showPlaylist
-              ? Icons.library_music
-              : Icons.playlist_add_check),
-          label: Text(showPlaylist
-              ? 'Show All Songs'
-              : 'Show Playlist'),
-          onPressed: onTogglePlaylistView,
-        ),
-        if (isPlayingAll)
-          Padding(
-            padding: const EdgeInsets.only(left: 12.0),
-            child: Text(
-              'Playing all...',
-              style: TextStyle(color: Colors.green[700]),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          if (!showPlaylist)
+            ElevatedButton.icon(
+              icon: const Icon(Icons.queue_music),
+              label: const Text('Play All'),
+              onPressed:
+                  (isPlayingAll || filteredSongs.isEmpty) ? null : onPlayAll,
             ),
+          if (showPlaylist)
+            ElevatedButton.icon(
+              icon: const Icon(Icons.playlist_play),
+              label: const Text('Play All (Playlist)'),
+              onPressed: (isPlayingAll || playlist.isEmpty)
+                  ? null
+                  : onPlayAllPlaylist,
+            ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            icon: Icon(showPlaylist
+                ? Icons.library_music
+                : Icons.playlist_add_check),
+            label: Text(showPlaylist
+                ? 'Show All Songs'
+                : 'Show Playlist'),
+            onPressed: onTogglePlaylistView,
           ),
-      ],
+          if (isPlayingAll)
+            Padding(
+              padding: const EdgeInsets.only(left: 12.0),
+              child: Text(
+                'Playing all...',
+                style: TextStyle(color: Colors.green[700]),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -384,14 +430,13 @@ class PlayControlsRow extends StatelessWidget {
 class SongProgressBar extends StatelessWidget {
   final Duration duration;
   final Duration position;
-
-  // no onSeek change as we work with streams and the native player doesn't support that on android
-  // final ValueChanged<Duration> onSeek;
+  final Function(Duration) onSeek;
 
   const SongProgressBar({
     super.key,
     required this.duration,
     required this.position,
+    required this.onSeek,
   });
 
   String _formatDuration(Duration d) {
@@ -403,9 +448,8 @@ class SongProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final max = duration.inMilliseconds.toDouble();
-    final value =
-        position.inMilliseconds.clamp(0, duration.inMilliseconds).toDouble();
+    final max = duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0;
+    final value = position.inMilliseconds.clamp(0, max.toInt()).toDouble();
 
     return Column(
       children: [
@@ -413,11 +457,9 @@ class SongProgressBar extends StatelessWidget {
           min: 0,
           max: max,
           value: value,
-          onChanged: null,
-          /*   onChanged:
-              duration.inMilliseconds > 0
-                  ? (v) => onSeek(Duration(milliseconds: v.toInt()))
-                  : null, */
+          onChanged: duration.inMilliseconds > 0
+              ? (v) => onSeek(Duration(milliseconds: v.toInt()))
+              : null,
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
