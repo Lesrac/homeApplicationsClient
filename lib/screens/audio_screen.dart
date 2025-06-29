@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../helper/headers.dart';
 import '../models/credentials.dart';
@@ -32,10 +33,13 @@ class _AudioScreenState extends State<AudioScreen> {
   List<String> _playlist = [];
   bool _showPlaylist = false;
 
+  static const String _playlistKey = 'audio_playlist';
+
   @override
   void initState() {
     super.initState();
     _fetchSongs();
+    _loadPlaylist(); // Load playlist from storage
     player.onPlayerComplete.listen((event) {
       if (_isPlayingAll && _playAllIndex < _playAllQueue.length - 1) {
         setState(() {
@@ -127,11 +131,28 @@ class _AudioScreenState extends State<AudioScreen> {
     await _play(_playAllQueue[_playAllIndex], fromPlayAll: true);
   }
 
+  Future<void> _loadPlaylist() async {
+    final prefs = await SharedPreferences.getInstance();
+    final playlistJson = prefs.getString(_playlistKey);
+    if (playlistJson != null) {
+      final List<dynamic> loaded = jsonDecode(playlistJson);
+      setState(() {
+        _playlist = loaded.cast<String>();
+      });
+    }
+  }
+
+  Future<void> _savePlaylist() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_playlistKey, jsonEncode(_playlist));
+  }
+
   void _addToPlaylist(String title) {
     if (!_playlist.contains(title)) {
       setState(() {
         _playlist.add(title);
       });
+      _savePlaylist();
     }
   }
 
@@ -139,6 +160,7 @@ class _AudioScreenState extends State<AudioScreen> {
     setState(() {
       _playlist.remove(title);
     });
+    _savePlaylist();
   }
 
   void _togglePlaylistView() {
@@ -206,6 +228,7 @@ class _AudioScreenState extends State<AudioScreen> {
                                     final item = _playlist.removeAt(oldIndex);
                                     _playlist.insert(newIndex, item);
                                   });
+                                  _savePlaylist();
                                 },
                                 itemBuilder: (context, index) {
                                   final title = _playlist[index];
