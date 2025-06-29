@@ -28,6 +28,10 @@ class _AudioScreenState extends State<AudioScreen> {
   List<String> _playAllQueue = [];
   List<String> _songs = [];
 
+  // Playlist state
+  List<String> _playlist = [];
+  bool _showPlaylist = false;
+
   @override
   void initState() {
     super.initState();
@@ -123,6 +127,26 @@ class _AudioScreenState extends State<AudioScreen> {
     await _play(_playAllQueue[_playAllIndex], fromPlayAll: true);
   }
 
+  void _addToPlaylist(String title) {
+    if (!_playlist.contains(title)) {
+      setState(() {
+        _playlist.add(title);
+      });
+    }
+  }
+
+  void _removeFromPlaylist(String title) {
+    setState(() {
+      _playlist.remove(title);
+    });
+  }
+
+  void _togglePlaylistView() {
+    setState(() {
+      _showPlaylist = !_showPlaylist;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredSongs =
@@ -132,84 +156,204 @@ class _AudioScreenState extends State<AudioScreen> {
             )
             .toList();
 
+    final listToShow = _showPlaylist ? _playlist : filteredSongs;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Play music')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child:
-            _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : Column(
-                  children: [
-                    TextField(
-                      decoration: const InputDecoration(
-                        labelText: 'Filter songs',
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _filter = value;
-                        });
-                      },
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                children: [
+                  TextField(
+                    decoration: const InputDecoration(
+                      labelText: 'Filter songs',
                     ),
-                    const SizedBox(height: 16),
-                    if (_currentlyPlayingTitle != null)
-                      SongProgressBar(duration: _duration, position: _position),
-                    Row(
-                      children: [
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.queue_music),
-                          label: const Text('Play All'),
-                          onPressed:
-                              (_isPlayingAll || filteredSongs.isEmpty)
-                                  ? null
-                                  : () => _playAll(filteredSongs),
-                        ),
-                        if (_isPlayingAll)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 12.0),
-                            child: Text(
-                              'Playing all...',
-                              style: TextStyle(color: Colors.green[700]),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: filteredSongs.length,
-                        itemBuilder: (context, index) {
-                          final title = filteredSongs[index];
-                          final isPlaying = _currentlyPlayingTitle == title;
-                          return ListTile(
-                            leading: IconButton(
-                              icon: Icon(
-                                isPlaying ? Icons.stop : Icons.play_arrow,
+                    onChanged: (value) {
+                      setState(() {
+                        _filter = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  if (_currentlyPlayingTitle != null)
+                    SongProgressBar(duration: _duration, position: _position),
+                  PlayControlsRow(
+                    showPlaylist: _showPlaylist,
+                    isPlayingAll: _isPlayingAll,
+                    filteredSongs: filteredSongs,
+                    playlist: _playlist,
+                    onPlayAll: () => _playAll(filteredSongs),
+                    onPlayAllPlaylist: () => _playAll(_playlist),
+                    onTogglePlaylistView: _togglePlaylistView,
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: listToShow.isEmpty
+                        ? Center(
+                            child: Text(_showPlaylist
+                                ? 'Playlist is empty'
+                                : 'No songs found'),
+                          )
+                        : _showPlaylist
+                            ? ReorderableListView.builder(
+                                buildDefaultDragHandles: false,
+                                itemCount: _playlist.length,
+                                onReorder: (oldIndex, newIndex) {
+                                  setState(() {
+                                    if (newIndex > oldIndex) newIndex -= 1;
+                                    final item = _playlist.removeAt(oldIndex);
+                                    _playlist.insert(newIndex, item);
+                                  });
+                                },
+                                itemBuilder: (context, index) {
+                                  final title = _playlist[index];
+                                  final isPlaying = _currentlyPlayingTitle == title;
+                                  return ReorderableDragStartListener(
+                                    key: ValueKey('$title-$index'),
+                                    index: index,
+                                    child: ListTile(
+                                      leading: IconButton(
+                                        icon: Icon(
+                                          isPlaying ? Icons.stop : Icons.play_arrow,
+                                        ),
+                                        onPressed: () {
+                                          if (isPlaying) {
+                                            _stop();
+                                          } else {
+                                            _play(title);
+                                          }
+                                        },
+                                      ),
+                                      title: Text(
+                                        title,
+                                        style: TextStyle(
+                                          fontWeight: isPlaying
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                      trailing: IconButton(
+                                        icon: const Icon(Icons.remove_circle),
+                                        tooltip: 'Remove from playlist',
+                                        onPressed: () =>
+                                            _removeFromPlaylist(title),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              )
+                            : ListView.builder(
+                                itemCount: listToShow.length,
+                                itemBuilder: (context, index) {
+                                  final title = listToShow[index];
+                                  final isPlaying = _currentlyPlayingTitle == title;
+                                  final inPlaylist = _playlist.contains(title);
+                                  return ListTile(
+                                    leading: IconButton(
+                                      icon: Icon(
+                                        isPlaying ? Icons.stop : Icons.play_arrow,
+                                      ),
+                                      onPressed: () {
+                                        if (isPlaying) {
+                                          _stop();
+                                        } else {
+                                          _play(title);
+                                        }
+                                      },
+                                    ),
+                                    title: Text(
+                                      title,
+                                      style: TextStyle(
+                                        fontWeight: isPlaying
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                      ),
+                                    ),
+                                    trailing: IconButton(
+                                      icon: Icon(
+                                        inPlaylist
+                                            ? Icons.playlist_add_check
+                                            : Icons.playlist_add,
+                                        color: inPlaylist ? Colors.green : null,
+                                      ),
+                                      tooltip: inPlaylist
+                                          ? 'Already in playlist'
+                                          : 'Add to playlist',
+                                      onPressed: inPlaylist
+                                          ? null
+                                          : () => _addToPlaylist(title),
+                                    ),
+                                  );
+                                },
                               ),
-                              onPressed: () {
-                                if (isPlaying) {
-                                  _stop();
-                                } else {
-                                  _play(title);
-                                }
-                              },
-                            ),
-                            title: Text(
-                              title,
-                              style: TextStyle(
-                                fontWeight:
-                                    isPlaying
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
       ),
+    );
+  }
+}
+
+class PlayControlsRow extends StatelessWidget {
+  final bool showPlaylist;
+  final bool isPlayingAll;
+  final List<String> filteredSongs;
+  final List<String> playlist;
+  final VoidCallback onPlayAll;
+  final VoidCallback onPlayAllPlaylist;
+  final VoidCallback onTogglePlaylistView;
+
+  const PlayControlsRow({
+    super.key,
+    required this.showPlaylist,
+    required this.isPlayingAll,
+    required this.filteredSongs,
+    required this.playlist,
+    required this.onPlayAll,
+    required this.onPlayAllPlaylist,
+    required this.onTogglePlaylistView,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        if (!showPlaylist)
+          ElevatedButton.icon(
+            icon: const Icon(Icons.queue_music),
+            label: const Text('Play All'),
+            onPressed:
+                (isPlayingAll || filteredSongs.isEmpty) ? null : onPlayAll,
+          ),
+        if (showPlaylist)
+          ElevatedButton.icon(
+            icon: const Icon(Icons.playlist_play),
+            label: const Text('Play All (Playlist)'),
+            onPressed: (isPlayingAll || playlist.isEmpty)
+                ? null
+                : onPlayAllPlaylist,
+          ),
+        const SizedBox(width: 8),
+        OutlinedButton.icon(
+          icon: Icon(showPlaylist
+              ? Icons.library_music
+              : Icons.playlist_add_check),
+          label: Text(showPlaylist
+              ? 'Show All Songs'
+              : 'Show Playlist'),
+          onPressed: onTogglePlaylistView,
+        ),
+        if (isPlayingAll)
+          Padding(
+            padding: const EdgeInsets.only(left: 12.0),
+            child: Text(
+              'Playing all...',
+              style: TextStyle(color: Colors.green[700]),
+            ),
+          ),
+      ],
     );
   }
 }
