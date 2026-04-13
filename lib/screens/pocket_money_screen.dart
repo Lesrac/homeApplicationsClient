@@ -214,53 +214,70 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Add New Entry'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              TextField(
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(hintText: "Amount"),
-                onChanged: (value) {
-                  amount = int.tryParse(value) ?? 0;
-                },
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setStateDialog) {
+            return AlertDialog(
+              title: Text('Add New Entry'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  TextField(
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(hintText: "Amount"),
+                    onChanged: (value) {
+                      amount = int.tryParse(value) ?? 0;
+                    },
+                  ),
+                  SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          date != null
+                              ? DateFormat('yyyy-MM-dd').format(date!)
+                              : 'No date selected',
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () async {
+                          DateTime? pickedDate = await showDatePicker(
+                            context: context,
+                            initialDate: date ?? DateTime.now(),
+                            firstDate: DateTime(2010),
+                            lastDate: DateTime(2101),
+                          );
+                          if (pickedDate != null) {
+                            // Update the dialog-local state so the label updates immediately.
+                            setStateDialog(() {
+                              date = pickedDate;
+                            });
+                          }
+                        },
+                        child: Text("Select Date"),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: () async {
-                  DateTime? pickedDate = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime.now(),
-                    firstDate: DateTime(2010),
-                    lastDate: DateTime(2101),
-                  );
-                  setState(() {
-                    if (pickedDate != null) {
-                      date = pickedDate;
-                    }
-                  });
-                },
-                child: Text("Select Date"),
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: Text('Cancel'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: Text('Add'),
-              onPressed: () {
-                date ??= DateTime.now();
-                _addEntryToBackend(amount, date!, _selectedUserId!);
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
+              actions: <Widget>[
+                TextButton(
+                  child: Text('Cancel'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
+                TextButton(
+                  child: Text('Add'),
+                  onPressed: () {
+                    date ??= DateTime.now();
+                    _addEntryToBackend(amount, date!, _selectedUserId!);
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            );
+          },
         );
       },
     );
