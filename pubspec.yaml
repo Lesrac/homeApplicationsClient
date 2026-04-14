@@ -36,9 +36,50 @@ dependencies:
   http: ^1.4.0
   path_provider: ^2.1.2
   intl: ^0.20.2
-  audioplayers: ^6.5.0
+  audioplayers:
+    git:
+      url: https://github.com/Lesrac/audioplayers.git
+      ref: 16f5246
+      path: packages/audioplayers
   audio_service: ^0.18.18
   get_it: ^9.2.1
+
+dependency_overrides:
+  audioplayers:
+    git:
+      url: https://github.com/Lesrac/audioplayers.git
+      ref: 16f5246
+      path: packages/audioplayers
+  audioplayers_platform_interface:
+    git:
+      url: https://github.com/Lesrac/audioplayers.git
+      ref: 16f5246
+      path: packages/audioplayers_platform_interface
+  audioplayers_web:
+    git:
+      url: https://github.com/Lesrac/audioplayers.git
+      ref: 16f5246
+      path: packages/audioplayers_web
+  audioplayers_linux:
+    git:
+      url: https://github.com/Lesrac/audioplayers.git
+      ref: 16f5246
+      path: packages/audioplayers_linux
+  audioplayers_android:
+    git:
+      url: https://github.com/Lesrac/audioplayers.git
+      ref: 16f5246
+      path: packages/audioplayers_android
+  audioplayers_darwin:
+    git:
+      url: https://github.com/Lesrac/audioplayers.git
+      ref: 16f5246
+      path: packages/audioplayers_darwin
+  audioplayers_windows:
+    git:
+      url: https://github.com/Lesrac/audioplayers.git
+      ref: 16f5246
+      path: packages/audioplayers_windows
 
 dev_dependencies:
   flutter_test:

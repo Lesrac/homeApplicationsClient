@@ -11,4 +11,11 @@ class HeadersHelper {
       'Content-Type': 'application/json',
     };
   }
+
+  static Map<String, String> getAuthHeader(Credentials credentials) {
+    return {
+      HttpHeaders.authorizationHeader:
+          'Basic ${base64Encode(utf8.encode('${credentials.username}:${credentials.password}'))}',
+    };
+  }
 }

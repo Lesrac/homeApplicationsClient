@@ -21,6 +21,7 @@ class SongItem {
 class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   final List<MediaItem> _queue = [];
+  final Map<String, Map<String, String>?> _urlHeaders = {};
   int _currentIndex = -1;
 
   // Public getters for UI to read state
@@ -137,6 +138,9 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     _queue.clear();
     _queue.addAll(newQueue);
     queue.add(_queue);
+    // Prune any stored headers for URLs that are no longer in the queue
+    final urlsInQueue = _queue.map((m) => m.id).toSet();
+    _urlHeaders.removeWhere((k, _) => !urlsInQueue.contains(k));
   }
 
   @override
@@ -157,6 +161,8 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       }
     }
     queue.add(_queue);
+    // Remove any stored headers for the removed item's URL
+    _urlHeaders.remove(mediaItem.id);
   }
 
   @override
@@ -171,6 +177,7 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   }
 
   // Methods specific to our implementation
+  @override
   Future<void> playMediaItem(MediaItem item) async {
     final index = _queue.indexWhere((element) => element.id == item.id);
     if (index != -1) {
@@ -181,7 +188,13 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     }
   }
 
-  Future<void> playFromUrl(String url, String title) async {
+  /// Play a single URL and optionally provide HTTP headers used when loading the URL.
+  Future<void> playFromUrl(String url, String title, {Map<String, String>? headers}) async {
+    // store headers for this URL so _loadAndPlay can pass them to UrlSource
+    if (headers != null) {
+      _urlHeaders[url] = headers;
+    }
+
     final item = MediaItem(
       id: url,
       title: title,
@@ -197,8 +210,13 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       processingState: AudioProcessingState.loading,
     ));
 
-    // Load and play the URL
-    await _player.play(UrlSource(url));
+    // Load and play the URL, passing through any stored headers for this URL
+    final headers = _urlHeaders[url];
+    if (headers != null) {
+      await _player.play(UrlSource(url, headers: headers));
+    } else {
+      await _player.play(UrlSource(url));
+    }
 
     // Update state to ready
     playbackState.add(playbackState.value.copyWith(
@@ -207,16 +225,29 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     ));
   }
 
-  Future<void> playAll(List<SongItem> songs) async {
+  /// Play a list of songs. You can optionally provide headers which will be used for every URL.
+  Future<void> playAll(List<SongItem> songs, {Map<String, String>? headers}) async {
     final mediaItems = songs.map((song) => song.toMediaItem()).toList();
+    // store headers for each song URL if provided
+    if (headers != null) {
+      for (final song in songs) {
+        _urlHeaders[song.url] = headers;
+      }
+    }
     await updateQueue(mediaItems);
     if (mediaItems.isNotEmpty) {
       await skipToQueueItem(0);
     }
   }
 
-  void setPlaylist(List<SongItem> songs) {
+  /// Set in-memory playlist; optional headers will be associated with each URL.
+  void setPlaylist(List<SongItem> songs, {Map<String, String>? headers}) {
     final mediaItems = songs.map((song) => song.toMediaItem()).toList();
+    if (headers != null) {
+      for (final song in songs) {
+        _urlHeaders[song.url] = headers;
+      }
+    }
     updateQueue(mediaItems);
   }
 }

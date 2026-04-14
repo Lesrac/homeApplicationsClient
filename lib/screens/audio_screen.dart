@@ -136,7 +136,11 @@ class _AudioScreenState extends State<AudioScreen> {
     setState(() {
       _isPlayingAll = false; // Ensure play all mode is off for single play
     });
-    await _audioHandler.playFromUrl(url, title);
+    await _audioHandler.playFromUrl(
+      url,
+      title,
+      headers: HeadersHelper.getAuthHeader(widget.credentials),
+    );
   }
 
   Future<void> _stop() async {
@@ -155,7 +159,10 @@ class _AudioScreenState extends State<AudioScreen> {
       url: 'http://${widget.credentials.backendAddress}/audio/$title',
     )).toList();
 
-    await _audioHandler.playAll(songs);
+    await _audioHandler.playAll(
+      songs,
+      headers: HeadersHelper.getAuthHeader(widget.credentials),
+    );
   }
 
   Future<void> _loadPlaylist() async {
@@ -179,7 +186,10 @@ class _AudioScreenState extends State<AudioScreen> {
       url: 'http://${widget.credentials.backendAddress}/audio/$title',
     )).toList();
 
-    _audioHandler.setPlaylist(songs);
+    _audioHandler.setPlaylist(
+      songs,
+      headers: HeadersHelper.getAuthHeader(widget.credentials),
+    );
   }
 
   void _addToPlaylist(String title) {
