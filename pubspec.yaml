@@ -36,6 +36,7 @@ dependencies:
   http: ^1.4.0
   path_provider: ^2.1.2
   intl: ^0.20.2
+  table_calendar: ^3.2.0
   audioplayers: ^6.5.0
   audio_service: ^0.18.18
   get_it: ^9.2.1
