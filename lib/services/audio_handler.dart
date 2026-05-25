@@ -171,6 +171,7 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   }
 
   // Methods specific to our implementation
+  @override
   Future<void> playMediaItem(MediaItem item) async {
     final index = _queue.indexWhere((element) => element.id == item.id);
     if (index != -1) {
