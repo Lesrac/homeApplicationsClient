@@ -45,10 +45,46 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
     });
   }
 
+  Widget _userSelector() {
+    return DropdownButton<String>(
+        value:
+        _users.isNotEmpty && _selectedUserId != null
+            ? _users
+            .firstWhere(
+              (user) => user.id == _selectedUserId,
+          orElse: () => _users.first,
+        )
+            .name
+            : null,
+        hint: Text("Select User"),
+        onChanged: (String? newValue) {
+          setState(() {
+            _entries = [];
+            _errorMessage = '';
+
+            _selectedUserId =
+                _users
+                    .firstWhere(
+                      (user) => user.name == newValue,
+                  orElse: () => _users.first,
+                )
+                    .id;
+          });
+          _loadInitialData(widget.credentials);
+        },
+        items: _users.map<DropdownMenuItem<String>>((User user) {
+          return DropdownMenuItem<String>(
+            value: user.name,
+            child: Text(user.name),
+          );
+        }).toList(),
+      );
+  }
+
   @override
   void initState() {
     super.initState();
-    _showCalendar = !widget.credentials.admin;
+    _showCalendar = true;
     _loadCredentials().then((loadedCredentials) {
       // Guard against using the BuildContext after the widget is disposed.
       if (!mounted) return;
@@ -354,10 +390,16 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.all(8.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('Pocket Money Calendar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            SizedBox(height: 8),
+                            if (widget.credentials.admin)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: _userSelector()
+                              ),
                             Row(children: [
                               Container(width:12,height:12,decoration:BoxDecoration(color:Colors.orange,shape:BoxShape.circle)),
                               SizedBox(width:6), Text('Planned'), SizedBox(width:12),
@@ -369,6 +411,9 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
                       ),
                       Expanded(
                         child: TableCalendar(
+                          availableCalendarFormats: const {
+                            CalendarFormat.month: 'Month',
+                          },
                           firstDay: DateTime(2010, 1, 1),
                           lastDay: DateTime(2101, 12, 31),
                           focusedDay: _focusedDay,
@@ -405,43 +450,12 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
                 ),
               ),
             ),
-          widget.credentials.admin
-              ? Column(
+          // comment
+          if (!_showCalendar)
+            widget.credentials.admin
+                ? Column(
             children: [
-              DropdownButton<String>(
-                value:
-                _users.isNotEmpty && _selectedUserId != null
-                    ? _users
-                    .firstWhere(
-                      (user) => user.id == _selectedUserId,
-                  orElse: () => _users.first,
-                )
-                    .name
-                    : null,
-                hint: Text("Select User"),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    _entries = [];
-                    _errorMessage = '';
-
-                    _selectedUserId =
-                        _users
-                            .firstWhere(
-                              (user) => user.name == newValue,
-                          orElse: () => _users.first,
-                        )
-                            .id;
-                  });
-                  _loadInitialData(widget.credentials);
-                },
-                items:
-                _users.map<DropdownMenuItem<String>>((User user) {
-                  return DropdownMenuItem<String>(
-                    value: user.name,
-                    child: Text(user.name),
-                  );
-                }).toList(),
-              ),
+              _userSelector(),
               ElevatedButton(
                 onPressed:
                 _selectedUserId != null ? _showAddEntryDialog : null,
@@ -595,19 +609,6 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
                         await _addEntryToBackend(amount, day, userId);
                       },
                       child: Text('Save'),
-                    ),
-                    SizedBox(width:8),
-                    if (entries.isNotEmpty) ElevatedButton(
-                      onPressed: () async {
-                        Navigator.of(context).pop();
-                        await _confirmEntry(entries.first.id, !entries.first.confirmed);
-                        // Update local state optimistically
-                        setState(() {
-                          entries.first.confirmed = !entries.first.confirmed;
-                          _buildEventsMap();
-                        });
-                      },
-                      child: Text(entries.first.confirmed ? 'Mark as Not Received' : 'Mark as Received'),
                     ),
                   ],
                 ),
