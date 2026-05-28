@@ -10,6 +10,7 @@ import '../helper/headers.dart';
 import '../models/credentials.dart';
 import '../services/audio_handler.dart';
 import '../services/service_locator.dart';
+import '../services/audio_cache_service.dart';
 
 class AudioScreen extends StatefulWidget {
   final Credentials credentials;
@@ -22,6 +23,7 @@ class AudioScreen extends StatefulWidget {
 
 class _AudioScreenState extends State<AudioScreen> {
   late final AudioPlayerHandler _audioHandler;
+  late final AudioCacheService _cacheService;
   String? _currentlyPlayingTitle;
   Duration _duration = Duration.zero;
   String _filter = '';
@@ -30,6 +32,7 @@ class _AudioScreenState extends State<AudioScreen> {
   Duration _position = Duration.zero;
   List<String> _songs = [];
   List<MediaItem> _queue = []; // Store the current queue
+  Map<String, DownloadProgress> _downloadProgress = {};
 
   // Playlist state
   List<String> _playlist = [];
@@ -41,8 +44,21 @@ class _AudioScreenState extends State<AudioScreen> {
   void initState() {
     super.initState();
     _audioHandler = getIt<AudioHandler>() as AudioPlayerHandler;
+    _cacheService = getIt<AudioCacheService>();
+
+    // Set credentials in both services
+    _audioHandler.setCredentials(widget.credentials);
+    _cacheService.setCredentials(widget.credentials);
+
     _fetchSongs();
     _loadPlaylist();
+
+    // Listen to download progress
+    _cacheService.progressStream.listen((progress) {
+      setState(() {
+        _downloadProgress = progress;
+      });
+    });
 
     // Set up listeners
     _audioHandler.player.onPlayerComplete.listen((event) {
@@ -92,14 +108,6 @@ class _AudioScreenState extends State<AudioScreen> {
         _queue = queue;
       });
     });
-
-    // Listen to playback state changes
-    _audioHandler.playbackState.listen((playbackState) {
-      final isPlaying = playbackState.playing;
-      setState(() {
-        _isPlayingAll = isPlaying && _queue.length > 1;
-      });
-    });
   }
 
   Future<void> _fetchSongs() async {
@@ -136,11 +144,14 @@ class _AudioScreenState extends State<AudioScreen> {
     setState(() {
       _isPlayingAll = false; // Ensure play all mode is off for single play
     });
-    await _audioHandler.playFromUrl(url, title);
+    await _audioHandler.playSingle(url, title);
   }
 
   Future<void> _stop() async {
     await _audioHandler.stop();
+    setState(() {
+      _isPlayingAll = false;
+    });
   }
 
   Future<void> _playAll(List<String> songTitles) async {
@@ -208,6 +219,94 @@ class _AudioScreenState extends State<AudioScreen> {
     await _audioHandler.seek(position);
   }
 
+  void _queueDownload(String title) {
+    final url = 'http://${widget.credentials.backendAddress}/audio/$title';
+    _cacheService.queueDownload(title, url);
+  }
+
+  void _downloadAllFiltered() {
+    final filteredSongs = _songs
+        .where((title) => title.toLowerCase().contains(_filter.toLowerCase()))
+        .toList();
+
+    for (final title in filteredSongs) {
+      if (_cacheService.getDownloadState(title) == DownloadState.notDownloaded) {
+        _queueDownload(title);
+      }
+    }
+  }
+
+  void _downloadAllPlaylist() {
+    for (final title in _playlist) {
+      if (_cacheService.getDownloadState(title) == DownloadState.notDownloaded) {
+        _queueDownload(title);
+      }
+    }
+  }
+
+  Future<void> _deleteDownload(String title) async {
+    await _cacheService.deleteDownload(title);
+    setState(() {});
+  }
+
+  DownloadState _getDownloadState(String title) {
+    return _cacheService.getDownloadState(title);
+  }
+
+  Widget _buildDownloadButton(String title) {
+    final state = _getDownloadState(title);
+    final progress = _downloadProgress[title];
+
+    switch (state) {
+      case DownloadState.downloaded:
+        return IconButton(
+          icon: const Icon(Icons.download_done, color: Colors.green),
+          tooltip: 'Downloaded - tap to delete',
+          onPressed: () => _deleteDownload(title),
+        );
+      case DownloadState.downloading:
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                value: progress?.progress,
+                strokeWidth: 3,
+                backgroundColor: Colors.grey[300],
+              ),
+            ),
+            Text(
+              '${((progress?.progress ?? 0) * 100).toInt()}%',
+              style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold),
+            ),
+          ],
+        );
+      case DownloadState.queued:
+        return const SizedBox(
+          width: 32,
+          height: 32,
+          child: CircularProgressIndicator(
+            strokeWidth: 3,
+            backgroundColor: Colors.transparent,
+          ),
+        );
+      case DownloadState.error:
+        return IconButton(
+          icon: const Icon(Icons.error, color: Colors.red),
+          tooltip: progress?.errorMessage ?? 'Download failed',
+          onPressed: () => _queueDownload(title),
+        );
+      case DownloadState.notDownloaded:
+        return IconButton(
+          icon: const Icon(Icons.download),
+          tooltip: 'Download',
+          onPressed: () => _queueDownload(title),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredSongs =
@@ -252,6 +351,13 @@ class _AudioScreenState extends State<AudioScreen> {
                     onPlayAll: () => _playAll(filteredSongs),
                     onPlayAllPlaylist: () => _playAll(_playlist),
                     onTogglePlaylistView: _togglePlaylistView,
+                    onDownloadAllFiltered: _downloadAllFiltered,
+                    onDownloadAllPlaylist: _downloadAllPlaylist,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Cache: ${_cacheService.getCachedFileCount()} files, ${_cacheService.getFormattedCacheSize()}',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 16),
                   Expanded(
@@ -300,11 +406,17 @@ class _AudioScreenState extends State<AudioScreen> {
                                               : FontWeight.normal,
                                         ),
                                       ),
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.remove_circle),
-                                        tooltip: 'Remove from playlist',
-                                        onPressed: () =>
-                                            _removeFromPlaylist(title),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          _buildDownloadButton(title),
+                                          IconButton(
+                                            icon: const Icon(Icons.remove_circle),
+                                            tooltip: 'Remove from playlist',
+                                            onPressed: () =>
+                                                _removeFromPlaylist(title),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   );
@@ -337,19 +449,25 @@ class _AudioScreenState extends State<AudioScreen> {
                                             : FontWeight.normal,
                                       ),
                                     ),
-                                    trailing: IconButton(
-                                      icon: Icon(
-                                        inPlaylist
-                                            ? Icons.playlist_add_check
-                                            : Icons.playlist_add,
-                                        color: inPlaylist ? Colors.green : null,
-                                      ),
-                                      tooltip: inPlaylist
-                                          ? 'Already in playlist'
-                                          : 'Add to playlist',
-                                      onPressed: inPlaylist
-                                          ? null
-                                          : () => _addToPlaylist(title),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _buildDownloadButton(title),
+                                        IconButton(
+                                          icon: Icon(
+                                            inPlaylist
+                                                ? Icons.playlist_add_check
+                                                : Icons.playlist_add,
+                                            color: inPlaylist ? Colors.green : null,
+                                          ),
+                                          tooltip: inPlaylist
+                                              ? 'Already in playlist'
+                                              : 'Add to playlist',
+                                          onPressed: inPlaylist
+                                              ? null
+                                              : () => _addToPlaylist(title),
+                                        ),
+                                      ],
                                     ),
                                   );
                                 },
@@ -370,6 +488,8 @@ class PlayControlsRow extends StatelessWidget {
   final VoidCallback onPlayAll;
   final VoidCallback onPlayAllPlaylist;
   final VoidCallback onTogglePlaylistView;
+  final VoidCallback onDownloadAllFiltered;
+  final VoidCallback onDownloadAllPlaylist;
 
   const PlayControlsRow({
     super.key,
@@ -380,6 +500,8 @@ class PlayControlsRow extends StatelessWidget {
     required this.onPlayAll,
     required this.onPlayAllPlaylist,
     required this.onTogglePlaylistView,
+    required this.onDownloadAllFiltered,
+    required this.onDownloadAllPlaylist,
   });
 
   @override
@@ -388,14 +510,21 @@ class PlayControlsRow extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          if (!showPlaylist)
+          if (!showPlaylist) ...[
             ElevatedButton.icon(
               icon: const Icon(Icons.queue_music),
               label: const Text('Play All'),
               onPressed:
                   (isPlayingAll || filteredSongs.isEmpty) ? null : onPlayAll,
             ),
-          if (showPlaylist)
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.download),
+              label: const Text('Download All'),
+              onPressed: filteredSongs.isEmpty ? null : onDownloadAllFiltered,
+            ),
+          ],
+          if (showPlaylist) ...[
             ElevatedButton.icon(
               icon: const Icon(Icons.playlist_play),
               label: const Text('Play All (Playlist)'),
@@ -403,6 +532,13 @@ class PlayControlsRow extends StatelessWidget {
                   ? null
                   : onPlayAllPlaylist,
             ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.download),
+              label: const Text('Download All'),
+              onPressed: playlist.isEmpty ? null : onDownloadAllPlaylist,
+            ),
+          ],
           const SizedBox(width: 8),
           OutlinedButton.icon(
             icon: Icon(showPlaylist

@@ -1,6 +1,9 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'dart:async';
+import '../models/credentials.dart';
+import 'audio_cache_service.dart';
+import 'service_locator.dart';
 
 class SongItem {
   final String title;
@@ -22,6 +25,8 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   final AudioPlayer _player = AudioPlayer();
   final List<MediaItem> _queue = [];
   int _currentIndex = -1;
+  Credentials? _credentials;
+  late final AudioCacheService _cacheService;
 
   // Public getters for UI to read state
   AudioPlayer get player => _player;
@@ -30,7 +35,13 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   int get currentIndex => _currentIndex;
 
   AudioPlayerHandler() {
+    _cacheService = getIt<AudioCacheService>();
     _init();
+  }
+
+  void setCredentials(Credentials credentials) {
+    _credentials = credentials;
+    _cacheService.setCredentials(credentials);
   }
 
   Future<void> _init() async {
@@ -110,8 +121,8 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     // Update mediaItem
     mediaItem.add(_queue[index]);
 
-    // Start new playback
-    await _loadAndPlay(_queue[index].id);
+    // Start new playback, passing the index to verify it hasn't changed
+    await _loadAndPlay(_queue[index].id, index);
   }
 
   @override
@@ -191,21 +202,65 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     await playMediaItem(item);
   }
 
-  Future<void> _loadAndPlay(String url) async {
+  Future<void> playSingle(String url, String title) async {
+    // Clear the queue and play only this song
+    final item = MediaItem(
+      id: url,
+      title: title,
+      displayTitle: title,
+    );
+
+    // Replace queue with single item
+    await updateQueue([item]);
+    await skipToQueueItem(0);
+  }
+
+  Future<void> _loadAndPlay(String url, int expectedIndex) async {
     // Update state to loading
     playbackState.add(playbackState.value.copyWith(
       playing: true,
       processingState: AudioProcessingState.loading,
     ));
 
-    // Load and play the URL
-    await _player.play(UrlSource(url));
+    try {
+      // Extract title from the expected queue item
+      String? title;
+      if (expectedIndex >= 0 && expectedIndex < _queue.length) {
+        title = _queue[expectedIndex].title;
+      }
 
-    // Update state to ready
-    playbackState.add(playbackState.value.copyWith(
-      playing: true,
-      processingState: AudioProcessingState.ready,
-    ));
+      // Validate we have required data
+      if (title == null) {
+        throw Exception('Cannot play: song title is missing');
+      }
+
+      if (_credentials == null) {
+        throw Exception('Cannot play: credentials not set');
+      }
+
+      // Use cache service to get or download the file
+      final localPath = await _cacheService.getOrDownload(title, url);
+
+      // Check if user hasn't moved to a different song during download
+      if (_currentIndex != expectedIndex) {
+        // User moved on, don't play this song
+        return;
+      }
+
+      await _player.play(DeviceFileSource(localPath));
+
+      // Update state to ready
+      playbackState.add(playbackState.value.copyWith(
+        playing: true,
+        processingState: AudioProcessingState.ready,
+      ));
+    } catch (e) {
+      // Update state to error
+      playbackState.add(playbackState.value.copyWith(
+        playing: false,
+        processingState: AudioProcessingState.error,
+      ));
+    }
   }
 
   Future<void> playAll(List<SongItem> songs) async {
