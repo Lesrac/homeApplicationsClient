@@ -121,8 +121,8 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     // Update mediaItem
     mediaItem.add(_queue[index]);
 
-    // Start new playback
-    await _loadAndPlay(_queue[index].id);
+    // Start new playback, passing the index to verify it hasn't changed
+    await _loadAndPlay(_queue[index].id, index);
   }
 
   @override
@@ -202,7 +202,7 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     await playMediaItem(item);
   }
 
-  Future<void> _loadAndPlay(String url) async {
+  Future<void> _loadAndPlay(String url, int expectedIndex) async {
     // Update state to loading
     playbackState.add(playbackState.value.copyWith(
       playing: true,
@@ -210,10 +210,10 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     ));
 
     try {
-      // Extract title from the current media item
+      // Extract title from the expected queue item
       String? title;
-      if (_currentIndex >= 0 && _currentIndex < _queue.length) {
-        title = _queue[_currentIndex].title;
+      if (expectedIndex >= 0 && expectedIndex < _queue.length) {
+        title = _queue[expectedIndex].title;
       }
 
       // Validate we have required data
@@ -227,6 +227,13 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
 
       // Use cache service to get or download the file
       final localPath = await _cacheService.getOrDownload(title, url);
+
+      // Check if user hasn't moved to a different song during download
+      if (_currentIndex != expectedIndex) {
+        // User moved on, don't play this song
+        return;
+      }
+
       await _player.play(DeviceFileSource(localPath));
 
       // Update state to ready
