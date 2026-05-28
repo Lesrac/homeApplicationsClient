@@ -159,21 +159,48 @@ class AudioCacheService {
       // Check storage limit before downloading
       await enforceStorageLimit();
 
-      final response = await http.get(
-        Uri.parse(url),
-        headers: HeadersHelper.getHeaders(_credentials!),
-      );
+      final request = http.Request('GET', Uri.parse(url));
+      request.headers.addAll(HeadersHelper.getHeaders(_credentials!));
+
+      final response = await request.send();
 
       if (response.statusCode == 200) {
+        final contentLength = response.contentLength ?? 0;
         final file = File(filePath);
-        await file.writeAsBytes(response.bodyBytes);
+        final sink = file.openWrite();
+
+        int downloadedBytes = 0;
+
+        await response.stream.listen(
+          (chunk) {
+            sink.add(chunk);
+            downloadedBytes += chunk.length;
+
+            // Update progress
+            if (contentLength > 0) {
+              final progress = downloadedBytes / contentLength;
+              _updateProgress(title, DownloadState.downloading, progress);
+            }
+          },
+          onDone: () async {
+            await sink.close();
+          },
+          onError: (error) async {
+            await sink.close();
+            throw error;
+          },
+          cancelOnError: true,
+        ).asFuture();
+
+        // Get actual file size after download
+        final fileSize = await file.length();
 
         // Save metadata
         _metadata[filename] = AudioCacheMetadata(
           title: title,
           lastAccessed: DateTime.now(),
           downloadedAt: DateTime.now(),
-          fileSize: response.bodyBytes.length,
+          fileSize: fileSize,
         );
         await _saveMetadata();
 
