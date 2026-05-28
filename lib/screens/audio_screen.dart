@@ -144,7 +144,7 @@ class _AudioScreenState extends State<AudioScreen> {
     setState(() {
       _isPlayingAll = false; // Ensure play all mode is off for single play
     });
-    await _audioHandler.playFromUrl(url, title);
+    await _audioHandler.playSingle(url, title);
   }
 
   Future<void> _stop() async {

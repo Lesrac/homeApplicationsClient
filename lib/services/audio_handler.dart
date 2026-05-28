@@ -202,6 +202,19 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     await playMediaItem(item);
   }
 
+  Future<void> playSingle(String url, String title) async {
+    // Clear the queue and play only this song
+    final item = MediaItem(
+      id: url,
+      title: title,
+      displayTitle: title,
+    );
+
+    // Replace queue with single item
+    await updateQueue([item]);
+    await skipToQueueItem(0);
+  }
+
   Future<void> _loadAndPlay(String url, int expectedIndex) async {
     // Update state to loading
     playbackState.add(playbackState.value.copyWith(
