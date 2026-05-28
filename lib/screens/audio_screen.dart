@@ -108,14 +108,6 @@ class _AudioScreenState extends State<AudioScreen> {
         _queue = queue;
       });
     });
-
-    // Listen to playback state changes
-    _audioHandler.playbackState.listen((playbackState) {
-      final isPlaying = playbackState.playing;
-      setState(() {
-        _isPlayingAll = isPlaying && _queue.length > 1;
-      });
-    });
   }
 
   Future<void> _fetchSongs() async {
@@ -157,6 +149,9 @@ class _AudioScreenState extends State<AudioScreen> {
 
   Future<void> _stop() async {
     await _audioHandler.stop();
+    setState(() {
+      _isPlayingAll = false;
+    });
   }
 
   Future<void> _playAll(List<String> songTitles) async {
