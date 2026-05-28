@@ -39,6 +39,7 @@ class AudioCacheService {
   Directory? _cacheDir;
   Map<String, AudioCacheMetadata> _metadata = {};
   final Map<String, DownloadProgress> _downloadProgress = {};
+  final Map<String, Completer<String>> _downloadCompleters = {};
   final List<_DownloadTask> _downloadQueue = [];
   int _activeDownloads = 0;
   Credentials? _credentials;
@@ -141,8 +142,20 @@ class AudioCacheService {
       return localPath;
     }
 
-    // Download the file
-    return await _downloadFile(title, url);
+    // Check if download is already in progress for this title
+    if (_downloadCompleters.containsKey(title)) {
+      return await _downloadCompleters[title]!.future;
+    }
+
+    // Create completer for this download
+    final completer = Completer<String>();
+    _downloadCompleters[title] = completer;
+
+    // Queue the download
+    queueDownload(title, url);
+
+    // Wait for completion
+    return await completer.future;
   }
 
   Future<String> _downloadFile(String title, String url) async {
@@ -205,12 +218,26 @@ class AudioCacheService {
         await _saveMetadata();
 
         _updateProgress(title, DownloadState.downloaded, 1.0);
+
+        // Complete any waiters
+        if (_downloadCompleters.containsKey(title)) {
+          _downloadCompleters[title]!.complete(filePath);
+          _downloadCompleters.remove(title);
+        }
+
         return filePath;
       } else {
         throw Exception('Download failed with status: ${response.statusCode}');
       }
     } catch (e) {
       _updateProgress(title, DownloadState.error, 0.0, e.toString());
+
+      // Complete exceptionally for any waiters
+      if (_downloadCompleters.containsKey(title)) {
+        _downloadCompleters[title]!.completeError(e);
+        _downloadCompleters.remove(title);
+      }
+
       // Clean up partial download
       final file = File(filePath);
       if (await file.exists()) {
@@ -223,7 +250,12 @@ class AudioCacheService {
   void queueDownload(String title, String url) {
     final state = getDownloadState(title);
     if (state == DownloadState.downloaded || state == DownloadState.downloading || state == DownloadState.queued) {
-      return;
+      return; // Already downloaded, downloading, or queued
+    }
+
+    // Create completer if not exists (for manual downloads)
+    if (!_downloadCompleters.containsKey(title)) {
+      _downloadCompleters[title] = Completer<String>();
     }
 
     _downloadQueue.add(_DownloadTask(title: title, url: url));
@@ -270,6 +302,7 @@ class AudioCacheService {
     await _saveMetadata();
 
     _downloadProgress.remove(title);
+    _downloadCompleters.remove(title);
     _progressController.add(Map.from(_downloadProgress));
   }
 
