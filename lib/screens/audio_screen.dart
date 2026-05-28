@@ -270,19 +270,32 @@ class _AudioScreenState extends State<AudioScreen> {
           onPressed: () => _deleteDownload(title),
         );
       case DownloadState.downloading:
-        return SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(
-            value: progress?.progress,
-            strokeWidth: 2,
-          ),
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                value: progress?.progress,
+                strokeWidth: 3,
+                backgroundColor: Colors.grey[300],
+              ),
+            ),
+            Text(
+              '${((progress?.progress ?? 0) * 100).toInt()}%',
+              style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold),
+            ),
+          ],
         );
       case DownloadState.queued:
         return const SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          width: 32,
+          height: 32,
+          child: CircularProgressIndicator(
+            strokeWidth: 3,
+            backgroundColor: Colors.transparent,
+          ),
         );
       case DownloadState.error:
         return IconButton(
