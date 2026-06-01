@@ -456,10 +456,10 @@ class _AudioScreenState extends State<AudioScreen> {
                   color: inPlaylist ? Colors.green : null,
                 ),
                 tooltip: inPlaylist
-                    ? 'Already in playlist'
+                    ? 'Remove from playlist'
                     : 'Add to playlist',
                 onPressed: inPlaylist
-                    ? null
+                    ? () => _removeFromPlaylist(title)
                     : () => _addToPlaylist(title),
               ),
             ],
