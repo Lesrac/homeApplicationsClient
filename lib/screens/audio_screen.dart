@@ -224,26 +224,6 @@ class _AudioScreenState extends State<AudioScreen> {
     _cacheService.queueDownload(title, url);
   }
 
-  void _downloadAllFiltered() {
-    final filteredSongs = _songs
-        .where((title) => title.toLowerCase().contains(_filter.toLowerCase()))
-        .toList();
-
-    for (final title in filteredSongs) {
-      if (_cacheService.getDownloadState(title) == DownloadState.notDownloaded) {
-        _queueDownload(title);
-      }
-    }
-  }
-
-  void _downloadAllPlaylist() {
-    for (final title in _playlist) {
-      if (_cacheService.getDownloadState(title) == DownloadState.notDownloaded) {
-        _queueDownload(title);
-      }
-    }
-  }
-
   Future<void> _deleteDownload(String title) async {
     await _cacheService.deleteDownload(title);
     setState(() {});
@@ -351,8 +331,6 @@ class _AudioScreenState extends State<AudioScreen> {
                     onPlayAll: () => _playAll(filteredSongs),
                     onPlayAllPlaylist: () => _playAll(_playlist),
                     onTogglePlaylistView: _togglePlaylistView,
-                    onDownloadAllFiltered: _downloadAllFiltered,
-                    onDownloadAllPlaylist: _downloadAllPlaylist,
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -362,122 +340,135 @@ class _AudioScreenState extends State<AudioScreen> {
                   const SizedBox(height: 16),
                   Expanded(
                     child: listToShow.isEmpty
-                        ? Center(
-                            child: Text(_showPlaylist
-                                ? 'Playlist is empty'
-                                : 'No songs found'),
-                          )
+                        ? _noContent()
                         : _showPlaylist
-                            ? ReorderableListView.builder(
-                                buildDefaultDragHandles: false,
-                                itemCount: _playlist.length,
-                                onReorder: (oldIndex, newIndex) {
-                                  setState(() {
-                                    if (newIndex > oldIndex) newIndex -= 1;
-                                    final item = _playlist.removeAt(oldIndex);
-                                    _playlist.insert(newIndex, item);
-                                  });
-                                  _savePlaylist();
-                                },
-                                itemBuilder: (context, index) {
-                                  final title = _playlist[index];
-                                  final isPlaying = _currentlyPlayingTitle == title;
-                                  return ReorderableDragStartListener(
-                                    key: ValueKey('$title-$index'),
-                                    index: index,
-                                    child: ListTile(
-                                      leading: IconButton(
-                                        icon: Icon(
-                                          isPlaying ? Icons.stop : Icons.play_arrow,
-                                        ),
-                                        onPressed: () {
-                                          if (isPlaying) {
-                                            _stop();
-                                          } else {
-                                            _play(title);
-                                          }
-                                        },
-                                      ),
-                                      title: Text(
-                                        title,
-                                        style: TextStyle(
-                                          fontWeight: isPlaying
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                        ),
-                                      ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          _buildDownloadButton(title),
-                                          IconButton(
-                                            icon: const Icon(Icons.remove_circle),
-                                            tooltip: 'Remove from playlist',
-                                            onPressed: () =>
-                                                _removeFromPlaylist(title),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              )
-                            : ListView.builder(
-                                itemCount: listToShow.length,
-                                itemBuilder: (context, index) {
-                                  final title = listToShow[index];
-                                  final isPlaying = _currentlyPlayingTitle == title;
-                                  final inPlaylist = _playlist.contains(title);
-                                  return ListTile(
-                                    leading: IconButton(
-                                      icon: Icon(
-                                        isPlaying ? Icons.stop : Icons.play_arrow,
-                                      ),
-                                      onPressed: () {
-                                        if (isPlaying) {
-                                          _stop();
-                                        } else {
-                                          _play(title);
-                                        }
-                                      },
-                                    ),
-                                    title: Text(
-                                      title,
-                                      style: TextStyle(
-                                        fontWeight: isPlaying
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
-                                      ),
-                                    ),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        _buildDownloadButton(title),
-                                        IconButton(
-                                          icon: Icon(
-                                            inPlaylist
-                                                ? Icons.playlist_add_check
-                                                : Icons.playlist_add,
-                                            color: inPlaylist ? Colors.green : null,
-                                          ),
-                                          tooltip: inPlaylist
-                                              ? 'Already in playlist'
-                                              : 'Add to playlist',
-                                          onPressed: inPlaylist
-                                              ? null
-                                              : () => _addToPlaylist(title),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
+                            ? _playlistList()
+                            : _allSongsList(listToShow),
                   ),
                 ],
               ),
       ),
     );
   }
+
+  Center _noContent(){
+    return Center(
+      child: Text(_showPlaylist
+          ? 'Playlist is empty'
+          : 'No songs found'),
+    );
+  }
+
+  ReorderableListView _playlistList() {
+    return ReorderableListView.builder(
+      buildDefaultDragHandles: false,
+      itemCount: _playlist.length,
+      onReorder: (oldIndex, newIndex) {
+        setState(() {
+          if (newIndex > oldIndex) newIndex -= 1;
+          final item = _playlist.removeAt(oldIndex);
+          _playlist.insert(newIndex, item);
+        });
+        _savePlaylist();
+      },
+      itemBuilder: (context, index) {
+        final title = _playlist[index];
+        final isPlaying = _currentlyPlayingTitle == title;
+        return ReorderableDragStartListener(
+          key: ValueKey('$title-$index'),
+          index: index,
+          child: ListTile(
+            leading: IconButton(
+              icon: Icon(
+                isPlaying ? Icons.stop : Icons.play_arrow,
+              ),
+              onPressed: () {
+                if (isPlaying) {
+                  _stop();
+                } else {
+                  _play(title);
+                }
+              },
+            ),
+            title: Text(
+              title,
+              style: TextStyle(
+                fontWeight: isPlaying
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+              ),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDownloadButton(title),
+                IconButton(
+                  icon: const Icon(Icons.remove_circle),
+                  tooltip: 'Remove from playlist',
+                  onPressed: () =>
+                      _removeFromPlaylist(title),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  ListView _allSongsList(List<String> listToShow) {
+    return ListView.builder(
+      itemCount: listToShow.length,
+      itemBuilder: (context, index) {
+        final title = listToShow[index];
+        final isPlaying = _currentlyPlayingTitle == title;
+        final inPlaylist = _playlist.contains(title);
+        return ListTile(
+          leading: IconButton(
+            icon: Icon(
+              isPlaying ? Icons.stop : Icons.play_arrow,
+            ),
+            onPressed: () {
+              if (isPlaying) {
+                _stop();
+              } else {
+                _play(title);
+              }
+            },
+          ),
+          title: Text(
+            title,
+            style: TextStyle(
+              fontWeight: isPlaying
+                  ? FontWeight.bold
+                  : FontWeight.normal,
+            ),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDownloadButton(title),
+              IconButton(
+                icon: Icon(
+                  inPlaylist
+                      ? Icons.playlist_add_check
+                      : Icons.playlist_add,
+                  color: inPlaylist ? Colors.green : null,
+                ),
+                tooltip: inPlaylist
+                    ? 'Already in playlist'
+                    : 'Add to playlist',
+                onPressed: inPlaylist
+                    ? null
+                    : () => _addToPlaylist(title),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
 }
 
 class PlayControlsRow extends StatelessWidget {
@@ -488,8 +479,6 @@ class PlayControlsRow extends StatelessWidget {
   final VoidCallback onPlayAll;
   final VoidCallback onPlayAllPlaylist;
   final VoidCallback onTogglePlaylistView;
-  final VoidCallback onDownloadAllFiltered;
-  final VoidCallback onDownloadAllPlaylist;
 
   const PlayControlsRow({
     super.key,
@@ -500,8 +489,6 @@ class PlayControlsRow extends StatelessWidget {
     required this.onPlayAll,
     required this.onPlayAllPlaylist,
     required this.onTogglePlaylistView,
-    required this.onDownloadAllFiltered,
-    required this.onDownloadAllPlaylist,
   });
 
   @override
@@ -517,12 +504,6 @@ class PlayControlsRow extends StatelessWidget {
               onPressed:
                   (isPlayingAll || filteredSongs.isEmpty) ? null : onPlayAll,
             ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.download),
-              label: const Text('Download All'),
-              onPressed: filteredSongs.isEmpty ? null : onDownloadAllFiltered,
-            ),
           ],
           if (showPlaylist) ...[
             ElevatedButton.icon(
@@ -531,12 +512,6 @@ class PlayControlsRow extends StatelessWidget {
               onPressed: (isPlayingAll || playlist.isEmpty)
                   ? null
                   : onPlayAllPlaylist,
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.download),
-              label: const Text('Download All'),
-              onPressed: playlist.isEmpty ? null : onDownloadAllPlaylist,
             ),
           ],
           const SizedBox(width: 8),
