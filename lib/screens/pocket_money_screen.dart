@@ -47,38 +47,36 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
 
   Widget _userSelector() {
     return DropdownButton<String>(
-        value:
-        _users.isNotEmpty && _selectedUserId != null
-            ? _users
-            .firstWhere(
-              (user) => user.id == _selectedUserId,
-          orElse: () => _users.first,
-        )
-            .name
-            : null,
-        hint: Text("Select User"),
-        onChanged: (String? newValue) {
-          setState(() {
-            _entries = [];
-            _errorMessage = '';
-
-            _selectedUserId =
-                _users
-                    .firstWhere(
-                      (user) => user.name == newValue,
+      value: _users.isNotEmpty && _selectedUserId != null
+          ? _users
+                .firstWhere(
+                  (user) => user.id == _selectedUserId,
                   orElse: () => _users.first,
                 )
-                    .id;
-          });
-          _loadInitialData(widget.credentials);
-        },
-        items: _users.map<DropdownMenuItem<String>>((User user) {
-          return DropdownMenuItem<String>(
-            value: user.name,
-            child: Text(user.name),
-          );
-        }).toList(),
-      );
+                .name
+          : null,
+      hint: Text("Select User"),
+      onChanged: (String? newValue) {
+        setState(() {
+          _entries = [];
+          _errorMessage = '';
+
+          _selectedUserId = _users
+              .firstWhere(
+                (user) => user.name == newValue,
+                orElse: () => _users.first,
+              )
+              .id;
+        });
+        _loadInitialData(widget.credentials);
+      },
+      items: _users.map<DropdownMenuItem<String>>((User user) {
+        return DropdownMenuItem<String>(
+          value: user.name,
+          child: Text(user.name),
+        );
+      }).toList(),
+    );
   }
 
   @override
@@ -93,9 +91,7 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
           _selectedUserId = loadedCredentials.id; // Set for non-admin users
         }
         if (loadedCredentials.admin) {
-          _loadUsers(
-            loadedCredentials,
-          ).then((value) {
+          _loadUsers(loadedCredentials).then((value) {
             if (!mounted) return;
             _loadInitialData(loadedCredentials);
           });
@@ -144,16 +140,15 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
         throw Exception('Failed to load users.');
       }
       setState(() {
-        _users =
-            [User(null, id: -1, name: 'Select User', access: 'user')]
-                .followedBy(
+        _users = [User(null, id: -1, name: 'Select User', access: 'user')]
+            .followedBy(
               (jsonDecode(response.body) as List)
                   .map((userJson) => User.fromJson(userJson))
                   .toList()
                   .where((user) => !user.isAdmin)
                   .toList(),
             )
-                .toList();
+            .toList();
         _selectedUserId = _users.isNotEmpty ? null : null;
         if (!credentials.admin) {
           _selectedUserId = credentials.id;
@@ -171,8 +166,9 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
       return;
     }
     try {
-      String userIdToLoad =
-      _selectedUserId != null ? _selectedUserId.toString() : "";
+      String userIdToLoad = _selectedUserId != null
+          ? _selectedUserId.toString()
+          : "";
       if (!credentials.admin) {
         userIdToLoad = credentials.id.toString();
       }
@@ -187,10 +183,9 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
         throw Exception('Failed to load pocket money entries.');
       }
       setState(() {
-        _entries =
-            (jsonDecode(response.body) as List)
-                .map((entryJson) => PocketMoneyEntry.fromJson(entryJson))
-                .toList();
+        _entries = (jsonDecode(response.body) as List)
+            .map((entryJson) => PocketMoneyEntry.fromJson(entryJson))
+            .toList();
       });
       _buildEventsMap();
     } catch (e) {
@@ -209,9 +204,7 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
     });
   }
 
-  Future<void> _addEntryToBackend(int amount,
-      DateTime date,
-      int userId,) async {
+  Future<void> _addEntryToBackend(int amount, DateTime date, int userId) async {
     try {
       final url = Uri.parse(
         'http://${widget.credentials.backendAddress}/pocketMoney/addAction',
@@ -233,9 +226,9 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
         _addEntry(amount, date, userId);
         // Rebuild calendar events map
         _buildEventsMap();
-         setState(() {
-           _errorMessage = '';
-         });
+        setState(() {
+          _errorMessage = '';
+        });
       }
     } catch (e) {
       setState(() {
@@ -247,8 +240,7 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
   Future<void> _confirmEntry(int? id, bool confirm) async {
     try {
       final url = Uri.parse(
-        'http://${widget.credentials
-            .backendAddress}/pocketMoney/acknowledgeAction',
+        'http://${widget.credentials.backendAddress}/pocketMoney/acknowledgeAction',
       );
       final response = await http.post(
         url,
@@ -279,69 +271,73 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
       context: context,
       builder: (BuildContext context) {
         return StatefulBuilder(
-          builder: (BuildContext context, void Function(void Function()) setStateDialog) {
-            return AlertDialog(
-              title: Text('Add New Entry'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  TextField(
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(hintText: "Amount"),
-                    onChanged: (value) {
-                      amount = int.tryParse(value) ?? 0;
-                    },
-                  ),
-                  SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          date != null
-                              ? DateFormat('yyyy-MM-dd').format(date!)
-                              : 'No date selected',
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () async {
-                          DateTime? pickedDate = await showDatePicker(
-                            context: context,
-                            initialDate: date ?? DateTime.now(),
-                            firstDate: DateTime(2010),
-                            lastDate: DateTime(2101),
-                          );
-                          if (pickedDate != null) {
-                            // Update the dialog-local state so the label updates immediately.
-                            setStateDialog(() {
-                              date = pickedDate;
-                            });
-                          }
+          builder:
+              (
+                BuildContext context,
+                void Function(void Function()) setStateDialog,
+              ) {
+                return AlertDialog(
+                  title: Text('Add New Entry'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      TextField(
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(hintText: "Amount"),
+                        onChanged: (value) {
+                          amount = int.tryParse(value) ?? 0;
                         },
-                        child: Text("Select Date"),
+                      ),
+                      SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              date != null
+                                  ? DateFormat('yyyy-MM-dd').format(date!)
+                                  : 'No date selected',
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () async {
+                              DateTime? pickedDate = await showDatePicker(
+                                context: context,
+                                initialDate: date ?? DateTime.now(),
+                                firstDate: DateTime(2010),
+                                lastDate: DateTime(2101),
+                              );
+                              if (pickedDate != null) {
+                                // Update the dialog-local state so the label updates immediately.
+                                setStateDialog(() {
+                                  date = pickedDate;
+                                });
+                              }
+                            },
+                            child: Text("Select Date"),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-              actions: <Widget>[
-                TextButton(
-                  child: Text('Cancel'),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                ),
-                TextButton(
-                  child: Text('Add'),
-                  onPressed: () {
-                    date ??= DateTime.now();
-                    _addEntryToBackend(amount, date!, _selectedUserId!);
-                    Navigator.of(context).pop();
-                  },
-                ),
-              ],
-            );
-          },
+                  actions: <Widget>[
+                    TextButton(
+                      child: Text('Cancel'),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                    TextButton(
+                      child: Text('Add'),
+                      onPressed: () {
+                        date ??= DateTime.now();
+                        _addEntryToBackend(amount, date!, _selectedUserId!);
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ],
+                );
+              },
         );
       },
     );
@@ -381,7 +377,7 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
       body: Stack(
         children: [
           // Calendar overlay (shows above the list when toggled)
-          if (_showCalendar && !(widget.credentials.admin && _selectedUserId == null))
+          if (_showCalendar)
             Positioned.fill(
               child: SafeArea(
                 child: Material(
@@ -393,58 +389,97 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Pocket Money Calendar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            Text(
+                              'Pocket Money Calendar',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             SizedBox(height: 8),
                             if (widget.credentials.admin)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 8.0),
-                                child: _userSelector()
+                                child: _userSelector(),
                               ),
-                            Row(children: [
-                              Container(width:12,height:12,decoration:BoxDecoration(color:Colors.orange,shape:BoxShape.circle)),
-                              SizedBox(width:6), Text('Planned'), SizedBox(width:12),
-                              Container(width:12,height:12,decoration:BoxDecoration(color:Colors.green,shape:BoxShape.circle)),
-                              SizedBox(width:6), Text('Received')
-                            ])
+                            Row(
+                              children: [
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                SizedBox(width: 6),
+                                Text('Planned'),
+                                SizedBox(width: 12),
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: Colors.green,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                SizedBox(width: 6),
+                                Text('Received'),
+                              ],
+                            ),
                           ],
                         ),
                       ),
-                      Expanded(
-                        child: TableCalendar(
-                          availableCalendarFormats: const {
-                            CalendarFormat.month: 'Month',
-                          },
-                          firstDay: DateTime(2010, 1, 1),
-                          lastDay: DateTime(2101, 12, 31),
-                          focusedDay: _focusedDay,
-                          selectedDayPredicate: (day) => _selectedDay != null && isSameDay(_selectedDay, day),
-                          eventLoader: (day) => _events[_normalizeDate(day)] ?? [],
-                          onDaySelected: (selected, focused) {
-                            setState(() {
-                              _selectedDay = selected;
-                              _focusedDay = focused;
-                            });
-                            _onDayTapped(selected);
-                          },
-                          calendarBuilders: CalendarBuilders(
-                            markerBuilder: (context, date, events) {
-                              if (events.isNotEmpty) {
-                                final anyConfirmed = events.any((e) => (e as PocketMoneyEntry?)?.confirmed ?? false);
-                                final color = anyConfirmed ? Colors.green : Colors.orange;
-                                return Align(
-                                  alignment: Alignment.bottomCenter,
-                                  child: Container(
-                                    width: 10,
-                                    height: 10,
-                                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                                  ),
-                                );
-                              }
-                              return SizedBox.shrink();
+                      if (!(widget.credentials.admin &&
+                          _selectedUserId == null))
+                        Expanded(
+                          child: TableCalendar(
+                            availableCalendarFormats: const {
+                              CalendarFormat.month: 'Month',
                             },
+                            firstDay: DateTime(2010, 1, 1),
+                            lastDay: DateTime(2101, 12, 31),
+                            focusedDay: _focusedDay,
+                            selectedDayPredicate: (day) =>
+                                _selectedDay != null &&
+                                isSameDay(_selectedDay, day),
+                            eventLoader: (day) =>
+                                _events[_normalizeDate(day)] ?? [],
+                            onDaySelected: (selected, focused) {
+                              setState(() {
+                                _selectedDay = selected;
+                                _focusedDay = focused;
+                              });
+                              _onDayTapped(selected);
+                            },
+                            calendarBuilders: CalendarBuilders(
+                              markerBuilder: (context, date, events) {
+                                if (events.isNotEmpty) {
+                                  final anyConfirmed = events.any(
+                                    (e) =>
+                                        (e as PocketMoneyEntry?)?.confirmed ??
+                                        false,
+                                  );
+                                  final color = anyConfirmed
+                                      ? Colors.green
+                                      : Colors.orange;
+                                  return Align(
+                                    alignment: Alignment.bottomCenter,
+                                    child: Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: color,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return SizedBox.shrink();
+                              },
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -454,104 +489,111 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
           if (!_showCalendar)
             widget.credentials.admin
                 ? Column(
-            children: [
-              _userSelector(),
-              ElevatedButton(
-                onPressed:
-                _selectedUserId != null ? _showAddEntryDialog : null,
-                child: Text('Add New Entry'),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  itemCount:
-                  _entries
-                      .where(
-                        (element) => element.userId == _selectedUserId,
+                    children: [
+                      _userSelector(),
+                      ElevatedButton(
+                        onPressed: _selectedUserId != null
+                            ? _showAddEntryDialog
+                            : null,
+                        child: Text('Add New Entry'),
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: _entries
+                              .where(
+                                (element) => element.userId == _selectedUserId,
+                              )
+                              .length,
+                          itemBuilder: (context, index) {
+                            List<PocketMoneyEntry> sortedEntries =
+                                _entries
+                                    .where(
+                                      (element) =>
+                                          element.userId == _selectedUserId,
+                                    )
+                                    .toList()
+                                  ..sort(
+                                    (a, b) => b.date.compareTo(a.date),
+                                  ); // Sort by date descending
+
+                            PocketMoneyEntry entry = sortedEntries[index];
+
+                            return ListTile(
+                              title: Text('Amount: ${entry.amount}'),
+                              subtitle: Text(
+                                'Date: ${DateFormat('yyyy-MM-dd').format(entry.date)}',
+                              ),
+                              trailing: Icon(
+                                entry.confirmed ? Icons.check : Icons.close,
+                                color: entry.confirmed
+                                    ? Colors.green
+                                    : Colors.red,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   )
-                      .length,
-                  itemBuilder: (context, index) {
-                    List<PocketMoneyEntry> sortedEntries =
-                    _entries
+                : ListView.builder(
+                    itemCount: _entries
                         .where(
-                          (element) =>
-                      element.userId == _selectedUserId,
-                    )
-                        .toList()
-                      ..sort(
-                            (a, b) => b.date.compareTo(a.date),
-                      ); // Sort by date descending
+                          (element) => element.userId == widget.credentials.id,
+                        )
+                        .length,
+                    itemBuilder: (context, index) {
+                      List<PocketMoneyEntry> sortedEntries =
+                          _entries
+                              .where(
+                                (element) => element.userId == _selectedUserId,
+                              )
+                              .toList()
+                            ..sort(
+                              (a, b) => b.date.compareTo(a.date),
+                            ); // Sort by date descending
 
-                    PocketMoneyEntry entry = sortedEntries[index];
-
-                    return ListTile(
-                      title: Text('Amount: ${entry.amount}'),
-                      subtitle: Text(
-                        'Date: ${DateFormat('yyyy-MM-dd').format(entry.date)}',
-                      ),
-                      trailing: Icon(
-                        entry.confirmed ? Icons.check : Icons.close,
-                        color: entry.confirmed ? Colors.green : Colors.red,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          )
-              : ListView.builder(
-            itemCount:
-            _entries
-                .where(
-                  (element) => element.userId == widget.credentials.id,
-            )
-                .length,
-            itemBuilder: (context, index) {
-              List<PocketMoneyEntry> sortedEntries =
-              _entries
-                  .where((element) => element.userId == _selectedUserId)
-                  .toList()
-                ..sort(
-                      (a, b) => b.date.compareTo(a.date),
-                ); // Sort by date descending
-
-              PocketMoneyEntry entry = sortedEntries[index];
-              return ListTile(
-                title: Text('Amount: ${entry.amount}'),
-                subtitle: Text(
-                  'Date: ${DateFormat('yyyy-MM-dd').format(entry.date)}',
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      entry.confirmed ? Icons.check : Icons.close,
-                      color: entry.confirmed ? Colors.green : Colors.red,
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        minimumSize: Size(0, 0),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: () {
-                        _confirmEntry(entry.id, !entry.confirmed);
-                        setState(() {
-                          entry.confirmed = !entry.confirmed;
-                        });
-                      },
-                      child: Text(
-                        entry.confirmed
-                            ? 'Mark as Not Received'
-                            : 'Mark as Received',
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+                      PocketMoneyEntry entry = sortedEntries[index];
+                      return ListTile(
+                        title: Text('Amount: ${entry.amount}'),
+                        subtitle: Text(
+                          'Date: ${DateFormat('yyyy-MM-dd').format(entry.date)}',
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              entry.confirmed ? Icons.check : Icons.close,
+                              color: entry.confirmed
+                                  ? Colors.green
+                                  : Colors.red,
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                minimumSize: Size(0, 0),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              onPressed: () {
+                                _confirmEntry(entry.id, !entry.confirmed);
+                                setState(() {
+                                  entry.confirmed = !entry.confirmed;
+                                });
+                              },
+                              child: Text(
+                                entry.confirmed
+                                    ? 'Mark as Not Received'
+                                    : 'Mark as Received',
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           if (_errorMessage.isNotEmpty)
             Positioned(
               top: 8, // Add some margin from the top
@@ -592,14 +634,17 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Date: ${DateFormat('yyyy-MM-dd').format(day)}', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  'Date: ${DateFormat('yyyy-MM-dd').format(day)}',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 TextField(
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(labelText: 'Amount'),
                   controller: TextEditingController(text: amount.toString()),
                   onChanged: (v) => amount = int.tryParse(v) ?? 0,
                 ),
-                SizedBox(height:8),
+                SizedBox(height: 8),
                 Row(
                   children: [
                     ElevatedButton(
@@ -622,7 +667,9 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('No planned amount for this day. Please contact an admin to set an amount.'),
+                  Text(
+                    'No planned amount for this day. Please contact an admin to set an amount.',
+                  ),
                 ],
               ),
             );
@@ -633,10 +680,13 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Date: ${DateFormat('yyyy-MM-dd').format(day)}', style: TextStyle(fontWeight: FontWeight.bold)),
-                SizedBox(height:8),
+                Text(
+                  'Date: ${DateFormat('yyyy-MM-dd').format(day)}',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 8),
                 Text('Amount: ${entry.amount}'),
-                SizedBox(height:8),
+                SizedBox(height: 8),
                 ElevatedButton(
                   onPressed: () async {
                     Navigator.of(context).pop();
@@ -646,7 +696,11 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
                       _buildEventsMap();
                     });
                   },
-                  child: Text(entry.confirmed ? 'Mark as Not Received' : 'Mark as Received'),
+                  child: Text(
+                    entry.confirmed
+                        ? 'Mark as Not Received'
+                        : 'Mark as Received',
+                  ),
                 ),
               ],
             ),
