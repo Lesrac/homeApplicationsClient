@@ -381,7 +381,7 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
       body: Stack(
         children: [
           // Calendar overlay (shows above the list when toggled)
-          if (_showCalendar)
+          if (_showCalendar && !(widget.credentials.admin && _selectedUserId == null))
             Positioned.fill(
               child: SafeArea(
                 child: Material(
