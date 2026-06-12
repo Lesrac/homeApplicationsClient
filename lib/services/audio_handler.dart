@@ -247,13 +247,15 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
         return;
       }
 
-      await _player.play(DeviceFileSource(localPath));
+      if (_queue.any((item) => item.title == title)) {
+        await _player.play(DeviceFileSource(localPath));
 
-      // Update state to ready
-      playbackState.add(playbackState.value.copyWith(
-        playing: true,
-        processingState: AudioProcessingState.ready,
-      ));
+        // Update state to ready
+        playbackState.add(playbackState.value.copyWith(
+          playing: true,
+          processingState: AudioProcessingState.ready,
+        ));
+      }
     } catch (e) {
       // Update state to error
       playbackState.add(playbackState.value.copyWith(
