@@ -500,11 +500,17 @@ class _AudioScreenState extends State<AudioScreen> {
                 tooltip: _isOffline
                     ? 'Playlist editing disabled (offline)'
                     : (inPlaylist
-                    ? 'Already in playlist'
-                    : 'Add to playlist'),
-                onPressed: (_isOffline || inPlaylist)
+                        ? 'Remove from playlist'
+                        : 'Add to playlist'),
+                onPressed: _isOffline
                     ? null
-                    : () => _addToPlaylist(title),
+                    : () {
+                        if (inPlaylist) {
+                          _removeFromPlaylist(title);
+                        } else {
+                          _addToPlaylist(title);
+                        }
+                      },
               ),
             ],
           ),
