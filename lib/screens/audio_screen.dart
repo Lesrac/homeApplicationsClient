@@ -28,6 +28,7 @@ class _AudioScreenState extends State<AudioScreen> {
   Duration _duration = Duration.zero;
   String _filter = '';
   bool _isLoading = true;
+  bool _isOffline = false;
   bool _isPlayingAll = false;
   Duration _position = Duration.zero;
   List<String> _songs = [];
@@ -125,18 +126,24 @@ class _AudioScreenState extends State<AudioScreen> {
         songsList.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         setState(() {
           _songs = songsList;
+          _isOffline = false;
           _isLoading = false;
         });
       } else {
-        setState(() {
-          _isLoading = false;
-        });
+        _handleFetchFailure();
       }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      _handleFetchFailure();
     }
+  }
+
+  void _handleFetchFailure() {
+    final cachedTitles = _cacheService.getCachedSongTitles();
+    setState(() {
+      _songs = cachedTitles;
+      _isOffline = true;
+      _isLoading = false;
+    });
   }
 
   Future<void> _play(String title) async {
@@ -194,6 +201,7 @@ class _AudioScreenState extends State<AudioScreen> {
   }
 
   void _addToPlaylist(String title) {
+    if (_isOffline) return;
     if (!_playlist.contains(title)) {
       setState(() {
         _playlist.add(title);
@@ -203,6 +211,7 @@ class _AudioScreenState extends State<AudioScreen> {
   }
 
   void _removeFromPlaylist(String title) {
+    if (_isOffline) return;
     setState(() {
       _playlist.remove(title);
     });
@@ -245,12 +254,36 @@ class _AudioScreenState extends State<AudioScreen> {
   }
 
   Future<void> _deleteDownload(String title) async {
+    if (_isOffline) return;
     await _cacheService.deleteDownload(title);
     setState(() {});
   }
 
   DownloadState _getDownloadState(String title) {
     return _cacheService.getDownloadState(title);
+  }
+
+  Widget _buildOfflineBanner() {
+    return MaterialBanner(
+      content: const Text(
+        'Server connection failed. Showing downloaded songs only. Playlist editing is disabled.',
+      ),
+      leading: const Icon(Icons.cloud_off, color: Colors.orange),
+      backgroundColor: Colors.orange.shade50,
+      actions: [
+        TextButton(
+          onPressed: _isLoading
+              ? null
+              : () {
+                  setState(() {
+                    _isLoading = true;
+                  });
+                  _fetchSongs();
+                },
+          child: const Text('Retry'),
+        ),
+      ],
+    );
   }
 
   Widget _buildDownloadButton(String title) {
@@ -261,8 +294,10 @@ class _AudioScreenState extends State<AudioScreen> {
       case DownloadState.downloaded:
         return IconButton(
           icon: const Icon(Icons.download_done, color: Colors.green),
-          tooltip: 'Downloaded - tap to delete',
-          onPressed: () => _deleteDownload(title),
+          tooltip: _isOffline
+              ? 'Downloaded (deletion disabled offline)'
+              : 'Downloaded - tap to delete',
+          onPressed: _isOffline ? null : () => _deleteDownload(title),
         );
       case DownloadState.downloading:
         return Stack(
@@ -326,6 +361,7 @@ class _AudioScreenState extends State<AudioScreen> {
             ? const Center(child: CircularProgressIndicator())
             : Column(
                 children: [
+                  if (_isOffline) _buildOfflineBanner(),
                   TextField(
                     decoration: const InputDecoration(
                       labelText: 'Filter songs',
@@ -371,14 +407,17 @@ class _AudioScreenState extends State<AudioScreen> {
                             ? ReorderableListView.builder(
                                 buildDefaultDragHandles: false,
                                 itemCount: _playlist.length,
-                                onReorder: (oldIndex, newIndex) {
-                                  setState(() {
-                                    if (newIndex > oldIndex) newIndex -= 1;
-                                    final item = _playlist.removeAt(oldIndex);
-                                    _playlist.insert(newIndex, item);
-                                  });
-                                  _savePlaylist();
-                                },
+                                onReorder: _isOffline
+                                    ? (_, __) {}
+                                    : (oldIndex, newIndex) {
+                                        setState(() {
+                                          if (newIndex > oldIndex) newIndex -= 1;
+                                          final item =
+                                              _playlist.removeAt(oldIndex);
+                                          _playlist.insert(newIndex, item);
+                                        });
+                                        _savePlaylist();
+                                      },
                                 itemBuilder: (context, index) {
                                   final title = _playlist[index];
                                   final isPlaying = _currentlyPlayingTitle == title;
@@ -412,9 +451,13 @@ class _AudioScreenState extends State<AudioScreen> {
                                           _buildDownloadButton(title),
                                           IconButton(
                                             icon: const Icon(Icons.remove_circle),
-                                            tooltip: 'Remove from playlist',
-                                            onPressed: () =>
-                                                _removeFromPlaylist(title),
+                                            tooltip: _isOffline
+                                                ? 'Playlist editing disabled (offline)'
+                                                : 'Remove from playlist',
+                                            onPressed: _isOffline
+                                                ? null
+                                                : () =>
+                                                    _removeFromPlaylist(title),
                                           ),
                                         ],
                                       ),
@@ -460,10 +503,12 @@ class _AudioScreenState extends State<AudioScreen> {
                                                 : Icons.playlist_add,
                                             color: inPlaylist ? Colors.green : null,
                                           ),
-                                          tooltip: inPlaylist
-                                              ? 'Already in playlist'
-                                              : 'Add to playlist',
-                                          onPressed: inPlaylist
+                                          tooltip: _isOffline
+                                              ? 'Playlist editing disabled (offline)'
+                                              : (inPlaylist
+                                                  ? 'Already in playlist'
+                                                  : 'Add to playlist'),
+                                          onPressed: (_isOffline || inPlaylist)
                                               ? null
                                               : () => _addToPlaylist(title),
                                         ),
