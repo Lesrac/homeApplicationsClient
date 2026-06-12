@@ -388,6 +388,15 @@ class AudioCacheService {
     return _metadata.length;
   }
 
+  // Returns sorted list of all cached song titles from metadata.
+  List<String> getCachedSongTitles() {
+    final titles = _metadata.values
+        .map((meta) => meta.title)
+        .toList();
+    titles.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return titles;
+  }
+
   void dispose() {
     _progressController.close();
   }
