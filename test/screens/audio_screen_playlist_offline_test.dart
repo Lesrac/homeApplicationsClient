@@ -268,4 +268,127 @@ void main() {
       },
     );
   });
+
+  group('Playlist toggle in all songs list (add/remove based on membership)', () {
+    // Simulates the toggle behavior of the playlist button in the all songs list.
+    // In the UI, the IconButton onPressed does:
+    //   if (_isOffline) -> null (disabled)
+    //   else -> if (inPlaylist) _removeFromPlaylist(title) else _addToPlaylist(title)
+    void togglePlaylist(List<String> playlist, String title, bool isOffline) {
+      if (isOffline) return;
+      final inPlaylist = playlist.contains(title);
+      if (inPlaylist) {
+        // _removeFromPlaylist logic
+        playlist.remove(title);
+      } else {
+        // _addToPlaylist logic
+        if (!playlist.contains(title)) {
+          playlist.add(title);
+        }
+      }
+    }
+
+    test(
+      'tapping playlist button when song is NOT in playlist adds it (online)',
+      () {
+        final playlist = <String>['Song A'];
+        const isOffline = false;
+
+        togglePlaylist(playlist, 'Song B', isOffline);
+
+        expect(playlist, ['Song A', 'Song B']);
+      },
+    );
+
+    test(
+      'tapping playlist button when song IS in playlist removes it (online)',
+      () {
+        final playlist = ['Song A', 'Song B', 'Song C'];
+        const isOffline = false;
+
+        togglePlaylist(playlist, 'Song B', isOffline);
+
+        expect(playlist, ['Song A', 'Song C']);
+        expect(playlist.contains('Song B'), isFalse);
+      },
+    );
+
+    test(
+      'toggling twice returns playlist to original state (online)',
+      () {
+        final playlist = ['Song A', 'Song B'];
+        const isOffline = false;
+
+        // Remove Song B
+        togglePlaylist(playlist, 'Song B', isOffline);
+        expect(playlist, ['Song A']);
+
+        // Add Song B back
+        togglePlaylist(playlist, 'Song B', isOffline);
+        expect(playlist, ['Song A', 'Song B']);
+      },
+    );
+
+    test(
+      'tapping playlist button is a no-op when offline (song not in playlist)',
+      () {
+        final playlist = <String>['Song A'];
+        const isOffline = true;
+
+        togglePlaylist(playlist, 'Song B', isOffline);
+
+        expect(playlist, ['Song A']);
+        expect(playlist.contains('Song B'), isFalse);
+      },
+    );
+
+    test(
+      'tapping playlist button is a no-op when offline (song already in playlist)',
+      () {
+        final playlist = ['Song A', 'Song B', 'Song C'];
+        const isOffline = true;
+
+        togglePlaylist(playlist, 'Song B', isOffline);
+
+        expect(playlist, ['Song A', 'Song B', 'Song C']);
+      },
+    );
+
+    test(
+      'multiple toggles while offline leave playlist unchanged',
+      () {
+        final playlist = ['Song A', 'Song B'];
+        const isOffline = true;
+
+        togglePlaylist(playlist, 'Song A', isOffline); // would remove
+        togglePlaylist(playlist, 'Song C', isOffline); // would add
+        togglePlaylist(playlist, 'Song B', isOffline); // would remove
+
+        expect(playlist, ['Song A', 'Song B']);
+      },
+    );
+
+    test(
+      'toggle works again after transitioning from offline to online',
+      () {
+        final playlist = ['Song A', 'Song B'];
+        var isOffline = true;
+
+        // Blocked while offline
+        togglePlaylist(playlist, 'Song A', isOffline);
+        expect(playlist, ['Song A', 'Song B']);
+
+        // Go online
+        isOffline = false;
+
+        // Now toggle removes Song A
+        togglePlaylist(playlist, 'Song A', isOffline);
+        expect(playlist, ['Song B']);
+
+        // Toggle adds Song C
+        togglePlaylist(playlist, 'Song C', isOffline);
+        expect(playlist, ['Song B', 'Song C']);
+      },
+    );
+  });
 }
