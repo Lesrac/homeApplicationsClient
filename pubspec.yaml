@@ -34,11 +34,11 @@ dependencies:
   shared_preferences: ^2.4.2
   cupertino_icons: ^1.0.8
   http: ^1.4.0
-  path_provider: ^2.1.2
-  intl: ^0.20.2
-  table_calendar: ^3.2.0
-  audioplayers: ^6.5.0
-  audio_service: ^0.18.18
+  path_provider: ^2.1.6
+  intl: ^0.20.3
+  table_calendar: ^3.2.1
+  audioplayers: ^6.7.1
+  audio_service: ^0.18.19
   get_it: ^9.2.1
 
 dev_dependencies:

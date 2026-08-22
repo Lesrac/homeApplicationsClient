@@ -47,10 +47,16 @@ class _FakeHttpClient implements HttpClient {
 }
 
 class _FakeHttpClientRequest implements HttpClientRequest {
+  @override
   final Uri uri;
+
+  @override
   final String method;
+
   final Map<String, dynamic> Function(Uri uri, String method, dynamic body)?
   handler;
+
+  @override
   final HttpHeaders headers = _FakeHttpHeaders();
   final List<int> _bodyBytes = [];
 
@@ -164,6 +170,7 @@ class _FakeHttpHeaders implements HttpHeaders {
 
 class _FakeHttpClientResponse extends Stream<List<int>>
     implements HttpClientResponse {
+  @override
   final int statusCode;
   final String body;
 
