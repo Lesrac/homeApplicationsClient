@@ -32,6 +32,9 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
   DateTime? _selectedDay;
   Map<DateTime, List<PocketMoneyEntry>> _events = {};
 
+  bool get _hasSelectedUser =>
+      _selectedUserId != null && _selectedUserId != -1;
+
   DateTime _normalizeDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
   void _buildEventsMap() {
@@ -47,7 +50,7 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
 
   Widget _userSelector() {
     return DropdownButton<String>(
-      value: _users.isNotEmpty && _selectedUserId != null
+      value: _users.isNotEmpty && _hasSelectedUser
           ? _users
                 .firstWhere(
                   (user) => user.id == _selectedUserId,
@@ -57,18 +60,19 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
           : null,
       hint: Text("Select User"),
       onChanged: (String? newValue) {
+        final selectedUser = _users.firstWhere(
+          (user) => user.name == newValue,
+          orElse: () => _users.first,
+        );
         setState(() {
           _entries = [];
           _errorMessage = '';
 
-          _selectedUserId = _users
-              .firstWhere(
-                (user) => user.name == newValue,
-                orElse: () => _users.first,
-              )
-              .id;
+          _selectedUserId = selectedUser.id == -1 ? null : selectedUser.id;
         });
-        _loadInitialData(widget.credentials);
+        if (_selectedUserId != null) {
+          _loadInitialData(widget.credentials);
+        }
       },
       items: _users.map<DropdownMenuItem<String>>((User user) {
         return DropdownMenuItem<String>(
@@ -162,7 +166,7 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
   }
 
   Future<void> _loadInitialData(Credentials credentials) async {
-    if (credentials.admin && _selectedUserId == null) {
+    if (credentials.admin && !_hasSelectedUser) {
       return;
     }
     try {
@@ -197,9 +201,17 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
 
   void _addEntry(int amount, DateTime date, int userId) {
     setState(() {
-      _entries.add(
-        PocketMoneyEntry(amount: amount, date: date, userId: userId),
+      final normalized = _normalizeDate(date);
+      final index = _entries.indexWhere(
+        (e) => _normalizeDate(e.date) == normalized && e.userId == userId,
       );
+      if (index != -1) {
+        _entries[index].amount = amount;
+      } else {
+        _entries.add(
+          PocketMoneyEntry(amount: amount, date: date, userId: userId),
+        );
+      }
       _entries.sort((a, b) => b.date.compareTo(a.date));
     });
   }
@@ -229,6 +241,7 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
         setState(() {
           _errorMessage = '';
         });
+        await _loadInitialData(widget.credentials);
       }
     } catch (e) {
       setState(() {
@@ -430,8 +443,7 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
                           ],
                         ),
                       ),
-                      if (!(widget.credentials.admin &&
-                          _selectedUserId == null))
+                      if (!(widget.credentials.admin && !_hasSelectedUser))
                         Expanded(
                           child: TableCalendar(
                             availableCalendarFormats: const {
@@ -492,7 +504,7 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
                     children: [
                       _userSelector(),
                       ElevatedButton(
-                        onPressed: _selectedUserId != null
+                        onPressed: _hasSelectedUser
                             ? _showAddEntryDialog
                             : null,
                         child: Text('Add New Entry'),
@@ -545,7 +557,8 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
                       List<PocketMoneyEntry> sortedEntries =
                           _entries
                               .where(
-                                (element) => element.userId == _selectedUserId,
+                                (element) =>
+                                    element.userId == widget.credentials.id,
                               )
                               .toList()
                             ..sort(
@@ -622,74 +635,77 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
   }
 
   void _onDayTapped(DateTime day) {
+    if (widget.credentials.admin && !_hasSelectedUser) {
+      setState(() {
+        _errorMessage = 'Please select a user first.';
+      });
+      return;
+    }
+
     final normalized = _normalizeDate(day);
     final entries = _events[normalized] ?? [];
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        if (widget.credentials.admin) {
-          int amount = entries.isNotEmpty ? entries.first.amount : 0;
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Date: ${DateFormat('yyyy-MM-dd').format(day)}',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                TextField(
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(labelText: 'Amount'),
-                  controller: TextEditingController(text: amount.toString()),
-                  onChanged: (v) => amount = int.tryParse(v) ?? 0,
-                ),
-                SizedBox(height: 8),
-                Row(
-                  children: [
-                    ElevatedButton(
-                      onPressed: () async {
-                        final userId = _selectedUserId ?? widget.credentials.id;
-                        Navigator.of(context).pop();
-                        await _addEntryToBackend(amount, day, userId);
-                      },
-                      child: Text('Save'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+
+    if (widget.credentials.admin) {
+      final initialAmount = entries.isNotEmpty ? entries.first.amount : 0;
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (bottomSheetContext) {
+          return _AdminEditEntryBottomSheet(
+            day: day,
+            initialAmount: initialAmount,
+            userId: _selectedUserId!,
+            onSave: (amount, date, userId) async {
+              await _addEntryToBackend(amount, date, userId);
+            },
           );
-        } else {
-          if (entries.isEmpty) {
+        },
+      );
+    } else {
+      if (entries.isEmpty) {
+        showModalBottomSheet(
+          context: context,
+          builder: (bottomSheetContext) {
             return Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: [
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: const [
                   Text(
                     'No planned amount for this day. Please contact an admin to set an amount.',
                   ),
                 ],
               ),
             );
-          }
-          final entry = entries.first;
+          },
+        );
+        return;
+      }
+      final entry = entries.first;
+      showModalBottomSheet(
+        context: context,
+        builder: (bottomSheetContext) {
           return Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
                   'Date: ${DateFormat('yyyy-MM-dd').format(day)}',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text('Amount: ${entry.amount}'),
-                SizedBox(height: 8),
+                const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () async {
-                    Navigator.of(context).pop();
+                    Navigator.of(bottomSheetContext).pop();
                     await _confirmEntry(entry.id, !entry.confirmed);
                     setState(() {
                       entry.confirmed = !entry.confirmed;
@@ -705,8 +721,100 @@ class _PocketMoneyScreenState extends State<PocketMoneyScreen> {
               ],
             ),
           );
-        }
-      },
+        },
+      );
+    }
+  }
+}
+
+class _AdminEditEntryBottomSheet extends StatefulWidget {
+  final DateTime day;
+  final int initialAmount;
+  final int userId;
+  final Future<void> Function(int amount, DateTime day, int userId) onSave;
+
+  const _AdminEditEntryBottomSheet({
+    required this.day,
+    required this.initialAmount,
+    required this.userId,
+    required this.onSave,
+  });
+
+  @override
+  State<_AdminEditEntryBottomSheet> createState() =>
+      _AdminEditEntryBottomSheetState();
+}
+
+class _AdminEditEntryBottomSheetState
+    extends State<_AdminEditEntryBottomSheet> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: widget.initialAmount > 0 ? widget.initialAmount.toString() : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        top: 16,
+        left: 16,
+        right: 16,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Date: ${DateFormat('yyyy-MM-dd').format(widget.day)}',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Amount',
+                hintText: 'Enter amount',
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () async {
+                    final amount = int.tryParse(_controller.text.trim()) ?? 0;
+                    Navigator.of(context).pop();
+                    await widget.onSave(amount, widget.day, widget.userId);
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
