@@ -400,8 +400,8 @@ class _AudioScreenState extends State<AudioScreen> {
       buildDefaultDragHandles: false,
       itemCount: _playlist.length,
       onReorder: _isOffline
-          ? (_, __) {}
-          :(oldIndex, newIndex) {
+          ? (_, _) {}
+          : (oldIndex, newIndex) {
         setState(() {
           if (newIndex > oldIndex) newIndex -= 1;
           final item = _playlist.removeAt(oldIndex);
@@ -412,46 +412,55 @@ class _AudioScreenState extends State<AudioScreen> {
       itemBuilder: (context, index) {
         final title = _playlist[index];
         final isPlaying = _currentlyPlayingTitle == title;
-        return ReorderableDragStartListener(
+        return ListTile(
           key: ValueKey('$title-$index'),
-          index: index,
-          child: ListTile(
-            leading: IconButton(
-              icon: Icon(
-                isPlaying ? Icons.stop : Icons.play_arrow,
-              ),
-              onPressed: () {
-                if (isPlaying) {
-                  _stop();
-                } else {
-                  _play(title);
-                }
-              },
+          leading: IconButton(
+            icon: Icon(
+              isPlaying ? Icons.stop : Icons.play_arrow,
             ),
-            title: Text(
-              title,
-              style: TextStyle(
-                fontWeight: isPlaying
-                    ? FontWeight.bold
-                    : FontWeight.normal,
-              ),
+            onPressed: () {
+              if (isPlaying) {
+                _stop();
+              } else {
+                _play(title);
+              }
+            },
+          ),
+          title: Text(
+            title,
+            style: TextStyle(
+              fontWeight: isPlaying
+                  ? FontWeight.bold
+                  : FontWeight.normal,
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildDownloadButton(title),
-                IconButton(
-                  icon: const Icon(Icons.remove_circle),
-                  tooltip: _isOffline
-                      ? 'Playlist editing disabled (offline)'
-                      : 'Remove from playlist',
-                  onPressed:  _isOffline
-                      ? null
-                      : () =>
-                      _removeFromPlaylist(title),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDownloadButton(title),
+              IconButton(
+                icon: const Icon(Icons.remove_circle),
+                tooltip: _isOffline
+                    ? 'Playlist editing disabled (offline)'
+                    : 'Remove from playlist',
+                onPressed: _isOffline
+                    ? null
+                    : () => _removeFromPlaylist(title),
+              ),
+              ReorderableDragStartListener(
+                index: index,
+                enabled: !_isOffline,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: Icon(
+                    Icons.drag_handle,
+                    color: _isOffline
+                        ? Theme.of(context).disabledColor
+                        : null,
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
