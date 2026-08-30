@@ -249,6 +249,7 @@ void main() {
       'Admin can select user, open date view bottom sheet, enter value, and save',
       (WidgetTester tester) async {
     Map<String, dynamic>? lastPostedBody;
+    final testDate = DateTime(DateTime.now().year, DateTime.now().month, 15);
 
     HttpOverrides.global = TestHttpOverrides(
       handler: (uri, method, body) {
@@ -269,7 +270,7 @@ void main() {
               {
                 'id': 10,
                 'amount': 20,
-                'date': DateTime.now().toIso8601String(),
+                'date': testDate.toIso8601String(),
                 'confirmed': false,
                 'user_id': 2,
               }
@@ -297,9 +298,8 @@ void main() {
     await tester.tap(find.text('Child1').last);
     await tester.pumpAndSettle();
 
-    // Find a day cell in the TableCalendar (today's day number)
-    final todayDay = DateTime.now().day.toString();
-    final dayWidget = find.text(todayDay).first;
+    // Find day cell 15 in the TableCalendar
+    final dayWidget = find.text('15').first;
     await tester.tap(dayWidget);
     await tester.pumpAndSettle();
 
@@ -335,6 +335,7 @@ void main() {
       'Admin can open date view bottom sheet and cancel without saving',
       (WidgetTester tester) async {
     Map<String, dynamic>? lastPostedBody;
+    final testDate = DateTime(DateTime.now().year, DateTime.now().month, 15);
 
     HttpOverrides.global = TestHttpOverrides(
       handler: (uri, method, body) {
@@ -355,7 +356,7 @@ void main() {
               {
                 'id': 10,
                 'amount': 20,
-                'date': DateTime.now().toIso8601String(),
+                'date': testDate.toIso8601String(),
                 'confirmed': false,
                 'user_id': 2,
               }
@@ -380,8 +381,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Tap day cell
-    final todayDay = DateTime.now().day.toString();
-    await tester.tap(find.text(todayDay).first);
+    await tester.tap(find.text('15').first);
     await tester.pumpAndSettle();
 
     expect(find.byType(TextField), findsOneWidget);
@@ -430,6 +430,7 @@ void main() {
   testWidgets('Non-admin user can view entry and mark as received',
       (WidgetTester tester) async {
     Map<String, dynamic>? lastAcknowledgeBody;
+    final testDate = DateTime(DateTime.now().year, DateTime.now().month, 15);
 
     HttpOverrides.global = TestHttpOverrides(
       handler: (uri, method, body) {
@@ -443,7 +444,7 @@ void main() {
               {
                 'id': 10,
                 'amount': 20,
-                'date': DateTime.now().toIso8601String(),
+                'date': testDate.toIso8601String(),
                 'confirmed': false,
                 'user_id': 2,
               }
@@ -461,9 +462,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Tap today on calendar
-    final todayDay = DateTime.now().day.toString();
-    final dayWidget = find.text(todayDay).first;
+    // Tap day 15 on calendar
+    final dayWidget = find.text('15').first;
     await tester.tap(dayWidget);
     await tester.pumpAndSettle();
 
