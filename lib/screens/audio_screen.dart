@@ -1,21 +1,30 @@
-import 'dart:convert';
-
 import 'package:audio_service/audio_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../helper/headers.dart';
 import '../models/credentials.dart';
+import '../services/audio_cache_service.dart';
 import '../services/audio_handler.dart';
 import '../services/service_locator.dart';
-import '../services/audio_cache_service.dart';
+import '../services/song_service.dart';
+import '../widgets/audio/all_songs_list.dart';
+import '../widgets/audio/audio_offline_banner.dart';
+import '../widgets/audio/play_controls_row.dart';
+import '../widgets/audio/playlist_reorderable_list.dart';
+import '../widgets/audio/song_progress_bar.dart';
+
+export '../widgets/audio/play_controls_row.dart';
+export '../widgets/audio/song_progress_bar.dart';
 
 class AudioScreen extends StatefulWidget {
   final Credentials credentials;
+  final SongService? songService;
 
-  const AudioScreen({super.key, required this.credentials});
+  const AudioScreen({
+    super.key,
+    required this.credentials,
+    this.songService,
+  });
 
   @override
   State<AudioScreen> createState() => _AudioScreenState();
@@ -24,6 +33,8 @@ class AudioScreen extends StatefulWidget {
 class _AudioScreenState extends State<AudioScreen> {
   late final AudioPlayerHandler _audioHandler;
   late final AudioCacheService _cacheService;
+  late final SongService _songService;
+
   String? _currentlyPlayingTitle;
   Duration _duration = Duration.zero;
   String _filter = '';
@@ -32,18 +43,17 @@ class _AudioScreenState extends State<AudioScreen> {
   bool _isPlayingAll = false;
   Duration _position = Duration.zero;
   List<String> _songs = [];
-  List<MediaItem> _queue = []; // Store the current queue
+  List<MediaItem> _queue = [];
   Map<String, DownloadProgress> _downloadProgress = {};
 
   // Playlist state
   List<String> _playlist = [];
   bool _showPlaylist = false;
 
-  static const String _playlistKey = 'audio_playlist';
-
   @override
   void initState() {
     super.initState();
+    _songService = widget.songService ?? SongService();
     _audioHandler = getIt<AudioHandler>() as AudioPlayerHandler;
     _cacheService = getIt<AudioCacheService>();
 
@@ -56,25 +66,30 @@ class _AudioScreenState extends State<AudioScreen> {
 
     // Listen to download progress
     _cacheService.progressStream.listen((progress) {
-      setState(() {
-        _downloadProgress = progress;
-      });
-    });
-
-    // Set up listeners
-    _audioHandler.player.onPlayerComplete.listen((event) {
-      // AudioService now handles progression in queue
-      if (_queue.isEmpty || _audioHandler.currentIndex >= _queue.length - 1) {
+      if (mounted) {
         setState(() {
-          _isPlayingAll = false;
+          _downloadProgress = progress;
         });
       }
     });
 
+    // Set up listeners
+    _audioHandler.player.onPlayerComplete.listen((event) {
+      if (_queue.isEmpty || _audioHandler.currentIndex >= _queue.length - 1) {
+        if (mounted) {
+          setState(() {
+            _isPlayingAll = false;
+          });
+        }
+      }
+    });
+
     _audioHandler.player.onDurationChanged.listen((Duration d) {
-      setState(() {
-        _duration = d;
-      });
+      if (mounted) {
+        setState(() {
+          _duration = d;
+        });
+      }
     });
 
     _audioHandler.player.positionUpdater = TimerPositionUpdater(
@@ -83,54 +98,49 @@ class _AudioScreenState extends State<AudioScreen> {
     );
 
     _audioHandler.player.onPositionChanged.listen((Duration p) {
-      setState(() {
-        _position = p;
-      });
+      if (mounted) {
+        setState(() {
+          _position = p;
+        });
+      }
     });
 
     // Listen to changes in currently playing item
     _audioHandler.mediaItem.listen((mediaItem) {
-      if (mediaItem != null) {
-        setState(() {
-          _currentlyPlayingTitle = mediaItem.title;
-        });
-      } else {
-        setState(() {
-          _currentlyPlayingTitle = null;
-          _duration = Duration.zero;
-          _position = Duration.zero;
-        });
+      if (mounted) {
+        if (mediaItem != null) {
+          setState(() {
+            _currentlyPlayingTitle = mediaItem.title;
+          });
+        } else {
+          setState(() {
+            _currentlyPlayingTitle = null;
+            _duration = Duration.zero;
+            _position = Duration.zero;
+          });
+        }
       }
     });
 
     // Listen to queue changes
     _audioHandler.queue.listen((queue) {
-      setState(() {
-        _queue = queue;
-      });
+      if (mounted) {
+        setState(() {
+          _queue = queue;
+        });
+      }
     });
   }
 
   Future<void> _fetchSongs() async {
-    final url = Uri.parse('http://${widget.credentials.backendAddress}/songs');
     try {
-      final response = await http.get(
-        url,
-        headers: HeadersHelper.getHeaders(widget.credentials),
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final List<dynamic> songsJson = data['songs'] ?? [];
-        final songsList =
-            songsJson.map<String>((song) => song['title'] as String).toList();
-        songsList.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      final songsList = await _songService.fetchSongs(widget.credentials);
+      if (mounted) {
         setState(() {
           _songs = songsList;
           _isOffline = false;
           _isLoading = false;
         });
-      } else {
-        _handleFetchFailure();
       }
     } catch (e) {
       _handleFetchFailure();
@@ -139,17 +149,19 @@ class _AudioScreenState extends State<AudioScreen> {
 
   void _handleFetchFailure() {
     final cachedTitles = _cacheService.getCachedSongTitles();
-    setState(() {
-      _songs = cachedTitles;
-      _isOffline = true;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _songs = cachedTitles;
+        _isOffline = true;
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _play(String title) async {
     final url = 'http://${widget.credentials.backendAddress}/audio/$title';
     setState(() {
-      _isPlayingAll = false; // Ensure play all mode is off for single play
+      _isPlayingAll = false;
     });
     await _audioHandler.playSingle(url, title);
   }
@@ -168,34 +180,38 @@ class _AudioScreenState extends State<AudioScreen> {
       _isPlayingAll = true;
     });
 
-    final songs = songTitles.map((title) => SongItem(
-      title: title,
-      url: 'http://${widget.credentials.backendAddress}/audio/$title',
-    )).toList();
+    final songs = songTitles
+        .map(
+          (title) => SongItem(
+            title: title,
+            url: 'http://${widget.credentials.backendAddress}/audio/$title',
+          ),
+        )
+        .toList();
 
     await _audioHandler.playAll(songs);
   }
 
   Future<void> _loadPlaylist() async {
-    final prefs = await SharedPreferences.getInstance();
-    final playlistJson = prefs.getString(_playlistKey);
-    if (playlistJson != null) {
-      final List<dynamic> loaded = jsonDecode(playlistJson);
+    final loaded = await _songService.loadPlaylist();
+    if (mounted) {
       setState(() {
-        _playlist = loaded.cast<String>();
+        _playlist = loaded;
       });
     }
   }
 
   Future<void> _savePlaylist() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_playlistKey, jsonEncode(_playlist));
+    await _songService.savePlaylist(_playlist);
 
-    // Also update the AudioHandler's queue (doesn't start playing)
-    final songs = _playlist.map((title) => SongItem(
-      title: title,
-      url: 'http://${widget.credentials.backendAddress}/audio/$title',
-    )).toList();
+    final songs = _playlist
+        .map(
+          (title) => SongItem(
+            title: title,
+            url: 'http://${widget.credentials.backendAddress}/audio/$title',
+          ),
+        )
+        .toList();
 
     _audioHandler.setPlaylist(songs);
   }
@@ -218,10 +234,29 @@ class _AudioScreenState extends State<AudioScreen> {
     _savePlaylist();
   }
 
+  void _togglePlaylist(String title) {
+    if (_isOffline) return;
+    if (_playlist.contains(title)) {
+      _removeFromPlaylist(title);
+    } else {
+      _addToPlaylist(title);
+    }
+  }
+
   void _togglePlaylistView() {
     setState(() {
       _showPlaylist = !_showPlaylist;
     });
+  }
+
+  void _reorderPlaylist(int oldIndex, int newIndex) {
+    if (_isOffline) return;
+    setState(() {
+      if (newIndex > oldIndex) newIndex -= 1;
+      final item = _playlist.removeAt(oldIndex);
+      _playlist.insert(newIndex, item);
+    });
+    _savePlaylist();
   }
 
   Future<void> _seekTo(Duration position) async {
@@ -243,95 +278,11 @@ class _AudioScreenState extends State<AudioScreen> {
     return _cacheService.getDownloadState(title);
   }
 
-  Widget _buildOfflineBanner() {
-    return MaterialBanner(
-      content: const Text(
-        'Server connection failed. Showing downloaded songs only. Playlist editing is disabled.',
-      ),
-      leading: const Icon(Icons.cloud_off, color: Colors.orange),
-      backgroundColor: Colors.orange.shade50,
-      actions: [
-        TextButton(
-          onPressed: _isLoading
-              ? null
-              : () {
-                  setState(() {
-                    _isLoading = true;
-                  });
-                  _fetchSongs();
-                },
-          child: const Text('Retry'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDownloadButton(String title) {
-    final state = _getDownloadState(title);
-    final progress = _downloadProgress[title];
-
-    switch (state) {
-      case DownloadState.downloaded:
-        return IconButton(
-          icon: const Icon(Icons.download_done, color: Colors.green),
-          tooltip: _isOffline
-              ? 'Downloaded (deletion disabled offline)'
-              : 'Downloaded - tap to delete',
-          onPressed: _isOffline ? null : () => _deleteDownload(title),
-        );
-      case DownloadState.downloading:
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: CircularProgressIndicator(
-                value: progress?.progress,
-                strokeWidth: 3,
-                backgroundColor: Colors.grey[300],
-              ),
-            ),
-            Text(
-              '${((progress?.progress ?? 0) * 100).toInt()}%',
-              style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold),
-            ),
-          ],
-        );
-      case DownloadState.queued:
-        return const SizedBox(
-          width: 32,
-          height: 32,
-          child: CircularProgressIndicator(
-            strokeWidth: 3,
-            backgroundColor: Colors.transparent,
-          ),
-        );
-      case DownloadState.error:
-        return IconButton(
-          icon: const Icon(Icons.error, color: Colors.red),
-          tooltip: progress?.errorMessage ?? 'Download failed',
-          onPressed: () => _queueDownload(title),
-        );
-      case DownloadState.notDownloaded:
-        return IconButton(
-          icon: const Icon(Icons.download),
-          tooltip: 'Download',
-          onPressed: () => _queueDownload(title),
-        );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final filteredSongs =
-        _songs
-            .where(
-              (title) => title.toLowerCase().contains(_filter.toLowerCase()),
-            )
-            .toList();
-
-    final listToShow = _showPlaylist ? _playlist : filteredSongs;
+    final filteredSongs = _songs
+        .where((title) => title.toLowerCase().contains(_filter.toLowerCase()))
+        .toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Play music')),
@@ -341,7 +292,16 @@ class _AudioScreenState extends State<AudioScreen> {
             ? const Center(child: CircularProgressIndicator())
             : Column(
                 children: [
-                  if (_isOffline) _buildOfflineBanner(),
+                  if (_isOffline)
+                    AudioOfflineBanner(
+                      isLoading: _isLoading,
+                      onRetry: () {
+                        setState(() {
+                          _isLoading = true;
+                        });
+                        _fetchSongs();
+                      },
+                    ),
                   TextField(
                     decoration: const InputDecoration(
                       labelText: 'Filter songs',
@@ -375,273 +335,37 @@ class _AudioScreenState extends State<AudioScreen> {
                   ),
                   const SizedBox(height: 16),
                   Expanded(
-                    child: listToShow.isEmpty
-                        ? _noContent()
-                        : _showPlaylist
-                            ? _playlistList()
-                            : _allSongsList(listToShow),
+                    child: _showPlaylist
+                        ? PlaylistReorderableList(
+                            playlist: _playlist,
+                            currentlyPlayingTitle: _currentlyPlayingTitle,
+                            isOffline: _isOffline,
+                            downloadProgress: _downloadProgress,
+                            getDownloadState: _getDownloadState,
+                            onPlay: _play,
+                            onStop: _stop,
+                            onRemoveFromPlaylist: _removeFromPlaylist,
+                            onReorder: _reorderPlaylist,
+                            onQueueDownload: _queueDownload,
+                            onDeleteDownload: _deleteDownload,
+                          )
+                        : AllSongsList(
+                            songs: filteredSongs,
+                            playlist: _playlist,
+                            currentlyPlayingTitle: _currentlyPlayingTitle,
+                            isOffline: _isOffline,
+                            downloadProgress: _downloadProgress,
+                            getDownloadState: _getDownloadState,
+                            onPlay: _play,
+                            onStop: _stop,
+                            onTogglePlaylist: _togglePlaylist,
+                            onQueueDownload: _queueDownload,
+                            onDeleteDownload: _deleteDownload,
+                          ),
                   ),
                 ],
               ),
       ),
-    );
-  }
-
-  Center _noContent(){
-    return Center(
-      child: Text(_showPlaylist
-          ? 'Playlist is empty'
-          : 'No songs found'),
-    );
-  }
-
-  ReorderableListView _playlistList() {
-    return ReorderableListView.builder(
-      buildDefaultDragHandles: false,
-      itemCount: _playlist.length,
-      onReorder: _isOffline
-          ? (_, _) {}
-          : (oldIndex, newIndex) {
-        setState(() {
-          if (newIndex > oldIndex) newIndex -= 1;
-          final item = _playlist.removeAt(oldIndex);
-          _playlist.insert(newIndex, item);
-        });
-        _savePlaylist();
-      },
-      itemBuilder: (context, index) {
-        final title = _playlist[index];
-        final isPlaying = _currentlyPlayingTitle == title;
-        return ListTile(
-          key: ValueKey('$title-$index'),
-          leading: IconButton(
-            icon: Icon(
-              isPlaying ? Icons.stop : Icons.play_arrow,
-            ),
-            onPressed: () {
-              if (isPlaying) {
-                _stop();
-              } else {
-                _play(title);
-              }
-            },
-          ),
-          title: Text(
-            title,
-            style: TextStyle(
-              fontWeight: isPlaying
-                  ? FontWeight.bold
-                  : FontWeight.normal,
-            ),
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildDownloadButton(title),
-              IconButton(
-                icon: const Icon(Icons.remove_circle),
-                tooltip: _isOffline
-                    ? 'Playlist editing disabled (offline)'
-                    : 'Remove from playlist',
-                onPressed: _isOffline
-                    ? null
-                    : () => _removeFromPlaylist(title),
-              ),
-              ReorderableDragStartListener(
-                index: index,
-                enabled: !_isOffline,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  child: Icon(
-                    Icons.drag_handle,
-                    color: _isOffline
-                        ? Theme.of(context).disabledColor
-                        : null,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  ListView _allSongsList(List<String> listToShow) {
-    return ListView.builder(
-      itemCount: listToShow.length,
-      itemBuilder: (context, index) {
-        final title = listToShow[index];
-        final isPlaying = _currentlyPlayingTitle == title;
-        final inPlaylist = _playlist.contains(title);
-        return ListTile(
-          leading: IconButton(
-            icon: Icon(
-              isPlaying ? Icons.stop : Icons.play_arrow,
-            ),
-            onPressed: () {
-              if (isPlaying) {
-                _stop();
-              } else {
-                _play(title);
-              }
-            },
-          ),
-          title: Text(
-            title,
-            style: TextStyle(
-              fontWeight: isPlaying
-                  ? FontWeight.bold
-                  : FontWeight.normal,
-            ),
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildDownloadButton(title),
-              IconButton(
-                icon: Icon(
-                  inPlaylist
-                      ? Icons.playlist_add_check
-                      : Icons.playlist_add,
-                  color: inPlaylist ? Colors.green : null,
-                ),
-                tooltip: _isOffline
-                    ? 'Playlist editing disabled (offline)'
-                    : (inPlaylist
-                        ? 'Remove from playlist'
-                        : 'Add to playlist'),
-                onPressed: _isOffline
-                    ? null
-                    : () {
-                        if (inPlaylist) {
-                          _removeFromPlaylist(title);
-                        } else {
-                          _addToPlaylist(title);
-                        }
-                      },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-}
-
-class PlayControlsRow extends StatelessWidget {
-  final bool showPlaylist;
-  final bool isPlayingAll;
-  final List<String> filteredSongs;
-  final List<String> playlist;
-  final VoidCallback onPlayAll;
-  final VoidCallback onPlayAllPlaylist;
-  final VoidCallback onTogglePlaylistView;
-
-  const PlayControlsRow({
-    super.key,
-    required this.showPlaylist,
-    required this.isPlayingAll,
-    required this.filteredSongs,
-    required this.playlist,
-    required this.onPlayAll,
-    required this.onPlayAllPlaylist,
-    required this.onTogglePlaylistView,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          if (!showPlaylist) ...[
-            ElevatedButton.icon(
-              icon: const Icon(Icons.queue_music),
-              label: const Text('Play All'),
-              onPressed:
-                  (isPlayingAll || filteredSongs.isEmpty) ? null : onPlayAll,
-            ),
-          ],
-          if (showPlaylist) ...[
-            ElevatedButton.icon(
-              icon: const Icon(Icons.playlist_play),
-              label: const Text('Play All (Playlist)'),
-              onPressed: (isPlayingAll || playlist.isEmpty)
-                  ? null
-                  : onPlayAllPlaylist,
-            ),
-          ],
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            icon: Icon(showPlaylist
-                ? Icons.library_music
-                : Icons.playlist_add_check),
-            label: Text(showPlaylist
-                ? 'Show All Songs'
-                : 'Show Playlist'),
-            onPressed: onTogglePlaylistView,
-          ),
-          if (isPlayingAll)
-            Padding(
-              padding: const EdgeInsets.only(left: 12.0),
-              child: Text(
-                'Playing all...',
-                style: TextStyle(color: Colors.green[700]),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class SongProgressBar extends StatelessWidget {
-  final Duration duration;
-  final Duration position;
-  final Function(Duration) onSeek;
-
-  const SongProgressBar({
-    super.key,
-    required this.duration,
-    required this.position,
-    required this.onSeek,
-  });
-
-  String _formatDuration(Duration d) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final minutes = twoDigits(d.inMinutes.remainder(60));
-    final seconds = twoDigits(d.inSeconds.remainder(60));
-    return '$minutes:$seconds';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final max = duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0;
-    final value = position.inMilliseconds.clamp(0, max.toInt()).toDouble();
-
-    return Column(
-      children: [
-        Slider(
-          min: 0,
-          max: max,
-          value: value,
-          onChanged: duration.inMilliseconds > 0
-              ? (v) => onSeek(Duration(milliseconds: v.toInt()))
-              : null,
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(_formatDuration(position)),
-            Text(
-              duration.inMilliseconds > 0 ? _formatDuration(duration) : "00:00",
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-      ],
     );
   }
 }
